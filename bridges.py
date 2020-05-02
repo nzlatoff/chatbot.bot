@@ -63,27 +63,27 @@ class Model:
         self.saver.restore(self.sess, self.ckpt)
 
     def run(
-        self, context_tokens, length=5, temperature=1,
+        self, prefix="<|endoftext|>", length=5, temperature=1,
     ):
-        return self.sess.run(
+        context_tokens = 1 * [self.enc.encode(prefix)]
+        return self.enc.decode(self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
                 self.context: context_tokens,
                 self.temperature: temperature,
             },
-        )
+        )[0])
 
     def dummy_run(self):
-        self.run(context_tokens=[self.enc.encode("A")], length=1)
+        self.run("A", length=1)
 
     # the two following functions adapted from here:
     # https://github.com/gpt2ent/gpt-2-simple/blob/652fdab80131ce83f8f1b6fd00f597dd48ae2e36/gpt_2_simple/gpt_2.py#L504
 
-    def get_logits(self, prefix="<|endoftext|>", batch_size=1, last_only=True):
+    def get_logits(self, context_tokens, batch_size=1, last_only=True):
 
         context = tf.compat.v1.placeholder(tf.int32, [batch_size, None])
-        context_tokens = self.enc.encode(prefix)
 
         def step(hparams, tokens, past=None):
             lm_output = model.model(
@@ -108,22 +108,18 @@ class Model:
         return out["logits"][0, -1, :]  # logits for next token
 
     def get_perplexity(
-        self, batch_size=1, prefix="<|endoftext|>", continuation="Hello"
+        self, batch_size=1, sentence="<|endoftext|>", verbose=False
     ):
 
-        context_tokens = self.enc.encode(prefix)
-
-        context_size = len(context_tokens)
-        continuation_tokens = self.enc.encode(continuation)
-
-        full_sentence = prefix + continuation
-
+        tkns = self.enc.encode(sentence)
+        len_tkns = len(tkns)
         logits = self.get_logits(
-            prefix=full_sentence, batch_size=batch_size, last_only=False
+            context_tokens=tkns, batch_size=batch_size, last_only=False
         )
 
-        # only continuation logits
-        logits = logits[context_size - 1 : -1, :]
+        # don't take the last one (predicting the token after our sentence)
+        # print(f"logits before shortening: {logits.shape}")
+        logits = logits[:-1, :]
         # normalizing logits for numerical stability
         # (does not affect the result)
         mu = np.mean(logits, axis=1)
@@ -131,46 +127,59 @@ class Model:
         le = np.exp(lm)
         logprobs = le / np.sum(le, axis=1)[:, None]
 
+        if verbose:
+            print(f"sentence: (len: {len_tkns:2}): {tkns}")
+            print(f"logit shape:    {len(logits.shape)}")
+            print(f"logprobs shape: {logprobs.shape}")
+            print()
+            for i, tkn in enumerate(tkns[1:]):
+                print(f"{i:3}: token: {tkn:5} | probability: {logprobs[i, tkn]}")
+            print()
+
         scores = np.nan_to_num(
-            [logprobs[i, index] for i, index in enumerate(continuation_tokens)]
+            [logprobs[i, index] for i, index in enumerate(tkns[1:])]
         )
         perplexity = 2 ** (-np.mean(np.log2(scores)))
         return perplexity
 
-    def perp_test(self, prefix, continuation):
-        print(f"prefix:       {prefix}")
-        print(f"continuation: {continuation}")
-        print(model.get_perplexity(prefix=prefix, continuation=continuation))
+    def perp_test(self, sentence, verbose=False):
+        print(f"sentence:   {sentence}")
+        print(f"perplexity: {self.get_perplexity(sentence=sentence, verbose=verbose)}")
         print()
 
 
-le_model_fw = Model(run_name='run1')
-le_model_bw = Model(run_name='run1')
+if __name__ == '__main__':
+    le_model_fw = Model(run_name='run1')
+    # le_model_bw = Model(run_name='run1')
 
-print('Le Model Forward:')
-start_fw = 'Bonjour, '
-tkns_fw = le_model_fw.enc.encode(start_fw)
-out = le_model_fw.run(1 * [tkns_fw], length=50)
-print(le_model_fw.enc.decode(out[0]))
+    # print('Le Model Forward:')
+    # start_fw = 'Bonjour, '
+    # tkns_fw = le_model_fw.enc.encode(start_fw)
+    # out = le_model_fw.run(1 * [tkns_fw], length=50)
+    # print(le_model_fw.enc.decode(out[0]))
 
-print('-'*40)
+    # print('-'*40)
 
-print('Le Model Backward:')
-start_bw = ' ,ruojnoB'
-tkns_bw = le_model_bw.enc.encode(start_bw)
-out = le_model_bw.run(1 * [tkns_bw], length=50)
-print(le_model_bw.enc.decode(out[0]))
+    # print('Le Model Backward:')
+    # start_bw = ' ,ruojnoB'
+    # tkns_bw = le_model_bw.enc.encode(start_bw)
+    # out = le_model_bw.run(1 * [tkns_bw], length=50)
+    # print(le_model_bw.enc.decode(out[0]))
 
-# print("Perplexity tests:")
+    print('-'*40)
+    print("Perplexity tests:")
 
-# le_model_fw.perp_test(prefix="Hello,",    continuation="my name is Mickey Mouse !"))
-# le_model_fw.perp_test(prefix="Hello",     continuation=" world!"))
-# le_model_fw.perp_test(prefix="Hello, ",   continuation="i23h5 wadhrwe 5h"))
-# le_model_fw.perp_test(prefix="Bonjour, ", continuation="i23h5 wadhrwe 5h"))
-# le_model_fw.perp_test(prefix="Bonjour, ", continuation="mon nom est Macron."))
-# le_model_fw.perp_test(prefix="Bonjour, ", continuation="mon nom est Licorne."))
-# le_model_fw.perp_test(prefix="Bonjour, ", continuation="mon nom est Licorne. Mon père est Poseidon."))
-# le_model_fw.perp_test(prefix="Bonjour, ", continuation="mon nom est Licorne. Je ne sais pas pourquoi je dis ce que je dis, mais je le dis."))
-# le_model_fw.perp_test(prefix="Bonjour, ", continuation="mon nom est Licorne. Mon nom est Licorne. Mon nom est Licorne. Mon nom est Licorne. Mon nom est Licorne. Mon nom est Licorne."))
-# le_model_fw.perp_test(prefix="Bonjour, ", continuation="mon nom est Licorne. Je ne sais pas pourquoi je dis ce que je dis, mais je le dis. Dans tous les cas, il me semble important de continuer à parler autant que faire se peut, même si parfois le sens se perd dans les tourbillons."))
-# le_model_fw.perp_test(prefix="Bonjour, ", continuation="mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon. mon."))
+    le_model_fw.perp_test(sentence="Hello, my name is Mickey Mouse !")
+    le_model_fw.perp_test(sentence="Hello world!")
+    le_model_fw.perp_test(sentence="Hello, i23h5 wadhrwe 5h")
+    le_model_fw.perp_test(sentence="Hello, i23h5 tomorrow 5h")
+    le_model_fw.perp_test(sentence="Bonjour, i23h5 demain 5h")
+    le_model_fw.perp_test(sentence="Bonjour, mon nom est Macron.")
+    le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne.")
+    le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne. Mon père est Poseidon.")
+    le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne. Je ne sais pas pourquoi je dis ce que je dis, mais je le dis.")
+    le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne. Mon nom est Licorne. Mon nom est Licorne.  Mon nom est Licorne. Mon nom est Licorne. Mon nom est Licorne.")
+    le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne. Je ne sais pas pourquoi je dis ce que je dis, mais je le dis. Dans tous les cas, il me semble important de continuer à parler autant que faire se peut, même si parfois le sens se perd dans les tourbillons.")
+    le_model_fw.perp_test(sentence="Bonjour, mon. mon. mon. mon.  mon. mon. mon. mon. mon. mon. mon. mon. mon. mon.  mon. mon. mon. mon. mon. mon. mon. mon. mon. mon.  mon. mon. mon. mon. mon. mon.")
+    le_model_fw.perp_test(sentence="A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. ")
+    le_model_fw.perp_test(sentence="""L'homme qui, sur le trottoir, attendait l'omnibus Batignolles-Clichy-Odéon en même temps que moi, certainement je le connaissais, mais où l'avais-je vu, et comment s'appelait-il ? Cruelle énigme ! Sans être un jeune homme, c'était un homme jeune encore.  Ses traits, ses façons, toute son allure indiquaient un personnage inquiet, susceptible et ronchonneur.  Enfin l'omnibus arriva.  """)
