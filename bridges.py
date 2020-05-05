@@ -2,7 +2,6 @@ from tensorflow.core.protobuf import rewriter_config_pb2
 import tensorflow as tf
 import numpy as np
 import encoder
-import sample
 import random
 import model
 import regex
@@ -60,13 +59,13 @@ class Model:
         self.check_batch_size(batch_size)
         context_tokens = self.batch_size * [self.encode(prefix)]
         tkns, logitst = self.sess.run(
-                self.output,
-                feed_dict={
-                    self.length: length,
-                    self.context: context_tokens,
-                    self.temperature: temperature,
-                },
-            )
+            self.output,
+            feed_dict={
+                self.length: length,
+                self.context: context_tokens,
+                self.temperature: temperature,
+            },
+        )
         return self.decode(tkns)
 
     def run(self, prefix="\n", length=5, temperature=1, batch_size=None):
@@ -82,13 +81,13 @@ class Model:
         self.check_batch_size(batch_size)
         context_tokens = self.batch_size * [self.encode(prefix)]
         return self.sess.run(
-                self.output,
-                feed_dict={
-                    self.length: length,
-                    self.context: context_tokens,
-                    self.temperature: temperature,
-                },
-            )
+            self.output,
+            feed_dict={
+                self.length: length,
+                self.context: context_tokens,
+                self.temperature: temperature,
+            },
+        )
 
     # --------------------------------------------------------------------------------
     # encoder/decoder utils
@@ -97,13 +96,33 @@ class Model:
         if isinstance(s, str):
             return np.array(self.enc.encode(s))
         elif isinstance(s, (list, tuple, np.ndarray)):
-            return np.array([self.enc.encode(ss) for ss in s])
+            return [self.enc.encode(ss) for ss in s]
 
     def decode(self, s):
         if isinstance(s[0], int):
             return np.array(self.enc.decode(s))
         elif isinstance(s, (list, tuple, np.ndarray)):
-            return np.array([self.enc.decode(ss) for ss in s])
+            return [self.enc.decode(ss) for ss in s]
+
+    def pad_sequences(
+        self,
+        seq,
+        maxlen=None,
+        dtype="int32",
+        padding="pre", # both pre or post
+        truncating="pre",
+        value=None,
+    ):
+        if value is None:
+            value = self.enc.encode(' ')[0] # space, often 220 in gpt-2
+        return tf.keras.preprocessing.sequence.pad_sequences(
+            self.encode(seq),
+            maxlen=maxlen,
+            dtype=dtype,
+            padding=padding,
+            truncating=truncating,
+            value=value,
+        )
 
     # --------------------------------------------------------------------------------
     # sampling utils
@@ -116,6 +135,7 @@ class Model:
         if k == 0:
             # no truncation
             return logits
+
         def _top_k():
             values, _ = tf.nn.top_k(logits, k=k)
             min_values = values[:, -1, tf.newaxis]
@@ -124,12 +144,8 @@ class Model:
                 tf.ones_like(logits, dtype=logits.dtype) * -1e10,
                 logits,
             )
-        return tf.cond(
-           tf.equal(k, 0),
-           lambda: logits,
-           lambda: _top_k(),
-        )
 
+        return tf.cond(tf.equal(k, 0), lambda: logits, lambda: _top_k(),)
 
     def top_p_logits(self, logits, p):
         """
@@ -143,12 +159,16 @@ class Model:
         be almost the entire vocabulary allowed (almost no preference, high
         randomness).
         """
-        with tf.compat.v1.variable_scope('top_p_logits'):
-            logits_sort = tf.sort(logits, direction='DESCENDING')
+        with tf.compat.v1.variable_scope("top_p_logits"):
+            logits_sort = tf.sort(logits, direction="DESCENDING")
             probs_sort = tf.nn.softmax(logits_sort)
             probs_sums = tf.cumsum(probs_sort, axis=1, exclusive=True)
-            logits_masked = tf.where(probs_sums < p, logits_sort, tf.ones_like(logits_sort)*1000) # [batchsize, vocab]
-            min_logits = tf.reduce_min(logits_masked, axis=1, keepdims=True) # [batchsize, 1]
+            logits_masked = tf.where(
+                probs_sums < p, logits_sort, tf.ones_like(logits_sort) * 1000
+            )  # [batchsize, vocab]
+            min_logits = tf.reduce_min(
+                logits_masked, axis=1, keepdims=True
+            )  # [batchsize, 1]
             return tf.where(
                 logits < min_logits,
                 tf.ones_like(logits, dtype=logits.dtype) * -1e10,
@@ -174,10 +194,7 @@ class Model:
                             (see model.past_shape and default_hparams())
         """
         lm_output = model.model(
-            hparams=self.hparams,
-            X=tokens,
-            past=past,
-            reuse=tf.compat.v1.AUTO_REUSE
+            hparams=self.hparams, X=tokens, past=past, reuse=tf.compat.v1.AUTO_REUSE
         )
         logits = lm_output["logits"][:, :, : self.hparams.n_vocab]
         presents = lm_output["present"]
@@ -190,12 +207,7 @@ class Model:
         }
 
     def sample(
-        self,
-        length=5,
-        context=None,
-        temperature=1,
-        top_k=0,
-        top_p=0.0,
+        self, length=5, context=None, temperature=1, top_k=0, top_p=0.0,
     ):
         """
         The Sample loop, using tf.while(), see:
@@ -253,11 +265,18 @@ class Model:
                 cond=cond,
                 body=body,
                 maximum_iterations=length,
-                loop_vars=[context_output["logits"], context_output["presents"], context[:, -1], context,],
+                loop_vars=[
+                    context_output["logits"],
+                    context_output["presents"],
+                    context[:, -1],
+                    context,
+                ],
                 shape_invariants=[
                     tf.TensorShape([self.batch_size, None, self.hparams.n_vocab]),
                     tf.TensorShape(
-                        model.past_shape(hparams=self.hparams, batch_size=self.batch_size)
+                        model.past_shape(
+                            hparams=self.hparams, batch_size=self.batch_size
+                        )
                     ),
                     tf.TensorShape([self.batch_size]),
                     tf.TensorShape([self.batch_size, None]),
@@ -300,7 +319,9 @@ class Model:
                 print("(batch size changed, resetting graph)")
                 self.reset(batch_size=batch_size)
 
-    def reset(self, hparams_file=None, device="/GPU:0", batch_size=1, top_k=0.0, top_p=0.0):
+    def reset(
+        self, hparams_file=None, device="/GPU:0", batch_size=1, top_k=0.0, top_p=0.0
+    ):
         self.check_hparams(hparams_file)
         self.batch_size = batch_size
         self.context = tf.compat.v1.placeholder(tf.int32, [self.batch_size, None])
@@ -352,9 +373,9 @@ class Model:
         self.check_batch_size(batch_size)
         tkns = self.encode(sentence)
         len_tkns = len(tkns)
-        logits = self.get_logits(
-            context_tokens=tkns, batch_size=self.batch_size
-        )[None, :-1, :] # None to keep dims intact
+        logits = self.get_logits(context_tokens=tkns, batch_size=self.batch_size)[
+            None, :-1, :
+        ]  # None to keep dims intact
         # don't take the last one (predicting the token after our sentence)
         # normalizing logits for numerical stability (does not affect the result)
         mu = np.mean(logits, axis=-1, keepdims=True)
