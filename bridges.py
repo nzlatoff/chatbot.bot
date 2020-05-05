@@ -58,7 +58,7 @@ class Model:
         """
         self.check_batch_size(batch_size)
         context_tokens = self.batch_size * [self.encode(prefix)]
-        tkns, logitst = self.sess.run(
+        tkns, logits = self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
@@ -391,124 +391,30 @@ class Model:
         # logits for next token, None to keep dims intact
         return logits[:, None, -1, :]
 
-    def get_perplexity(self, sentence=["\n"], batch_size=None, verbose=False):
-        self.check_batch_size(batch_size)
-        tkns = self.encode(sentence)
-        len_tkns = len(tkns)
-        logits = self.get_logits(context_tokens=tkns, batch_size=self.batch_size)[
-            :, :-1, :
-        ]
-        # None to keep dims intact
-        # don't take the last one (predicting the token after our sentence)
-        # normalizing logits for numerical stability (does not affect the result)
+    def normalize(self, logits, verbose=False):
         mu = np.mean(logits, axis=-1, keepdims=True)
         lm = logits - mu
         le = np.exp(lm)
-        logprobs = le / np.sum(le, axis=1, keepdims=True)
-        return logprobs, tkns
+        logprobs = le / np.sum(le, axis=-1, keepdims=True)
         if verbose:
-            print(f"sentence: (len: {len_tkns:2}): {tkns}")
-            print(f"logit shape:    {len(logits.shape)}")
-            print(f"logprobs shape: {logprobs.shape}")
-            print()
-            for i, tkn in enumerate(tkns[:-1]):
-                print(f"{i:3}: token: {tkn:5} | probability: {logprobs[i, tkn]}")
-            print()
-        # scores = np.nan_to_num(
-        #     [logprobs[:, i, token] for i, token in enumerate(tkns[:-1])]
-        # )
+            return logprobs, mu, lm, le
+        return logprobs
+
+    def get_perplexity(self, sentences=["\n"]):
+        if isinstance(sentences, str):
+            sentences = [sentences]
+        tkns = self.pad_sequences(sentences)
+        # don't take the last one (predicting the token after our sentence)
+        logits = self.get_logits(context_tokens=tkns)[:, :-1, :]
+        # normalization between 0 and 1
+        # most importantly: make all logits positive
+        # logprobs = normalize(logits)
+        logprobs = np.exp(logits)
         scores = np.nan_to_num(
             [
-                [logprobs[b, i, token] for i, token in enumerate(tkns[:-1])]
-                for b in range(self.batch_size)
+                [logprobs[j, i, token] for i, token in enumerate(seq[:-1])]
+                for j, seq in enumerate(tkns)
             ]
         )
         perplexities = 2 ** (-np.mean(np.log2(scores), axis=-1))
         return perplexities
-
-    def perp_test(self, sentence, verbose=False):
-        if verbose:
-            print(f"sentence:")
-            print(sentence)
-        print("-" * 10)
-        print(f"perplexity: {self.get_perplexity(sentence=sentence, verbose=verbose)}")
-        print()
-
-
-if __name__ == "__main__":
-    le_model_fw = Model(run_name="run1")
-
-    # ----------------------------------------
-    # try several runs, order by perplexity
-    results = []
-    for _ in range(10):
-        sc = le_model_fw.run(" ", length=50)
-        results.append({"cont": sc, "perp": le_model_fw.get_perplexity(sc)})
-
-    results = sorted(results, key=lambda x: x["perp"])
-    for i, r in enumerate(results):
-        print()
-        print(f"{i}:")
-        s = r["cont"]
-        print(s)
-        print(r["perp"])
-        print("-" * 20)
-
-    # # ----------------------------------------
-    # # try random continuations, order them by perplexity
-    # le_model_bw = Model(run_name='run1')
-
-    # sf = le_model_fw.run(' ', length=50)
-
-    # results = []
-    # for _ in range(10):
-    #     sc = le_model_bw.run(' ', length=50)
-    #     results.append({
-    #         "cont": sc,
-    #         "perp": le_model_fw.get_perplexity(sf+sc)
-    #     })
-
-    # results = sorted(results, key=lambda x: x["perp"], reverse=True)
-    # for r in results:
-    #     print()
-    #     s = r["cont"]
-    #     print(f"{sf} /// {s}")
-    #     print(r["perp"])
-    #     print("-"*20)
-
-    # ----------------------------------------
-    # hello from the two models
-
-    # print('Le Model Forward:')
-    # start_fw = 'Bonjour, '
-    # tkns_fw = le_model_fw.encode(start_fw)
-    # out = le_model_fw.run(1 * [tkns_fw], length=50)
-    # print(le_model_fw.decode(out[0]))
-
-    # print('-'*40)
-
-    # print('Le Model Backward:')
-    # start_bw = ' ,ruojnoB'
-    # tkns_bw = le_model_bw.encode(start_bw)
-    # out = le_model_bw.run(1 * [tkns_bw], length=50)
-    # print(le_model_bw.decode(out[0]))
-
-    # ----------------------------------------
-    # # perplexity tests on sentences
-    # print('-'*40)
-    # print("Perplexity tests:")
-
-    # le_model_fw.perp_test(sentence="Hello, my name is Mickey Mouse !")
-    # le_model_fw.perp_test(sentence="Hello world!")
-    # le_model_fw.perp_test(sentence="Hello, i23h5 wadhrwe 5h")
-    # le_model_fw.perp_test(sentence="Hello, i23h5 tomorrow 5h")
-    # le_model_fw.perp_test(sentence="Bonjour, i23h5 demain 5h")
-    # le_model_fw.perp_test(sentence="Bonjour, mon nom est Macron.")
-    # le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne.")
-    # le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne. Mon père est Poseidon.")
-    # le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne. Je ne sais pas pourquoi je dis ce que je dis, mais je le dis.")
-    # le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne. Mon nom est Licorne. Mon nom est Licorne.  Mon nom est Licorne. Mon nom est Licorne. Mon nom est Licorne.")
-    # le_model_fw.perp_test(sentence="Bonjour, mon nom est Licorne. Je ne sais pas pourquoi je dis ce que je dis, mais je le dis. Dans tous les cas, il me semble important de continuer à parler autant que faire se peut, même si parfois le sens se perd dans les tourbillons.")
-    # le_model_fw.perp_test(sentence="Bonjour, mon. mon. mon. mon.  mon. mon. mon. mon. mon. mon. mon. mon. mon. mon.  mon. mon. mon. mon. mon. mon. mon. mon. mon. mon.  mon. mon. mon. mon. mon. mon.")
-    # le_model_fw.perp_test(sentence="A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. A. ")
-    # le_model_fw.perp_test(sentence="""L'homme qui, sur le trottoir, attendait l'omnibus Batignolles-Clichy-Odéon en même temps que moi, certainement je le connaissais, mais où l'avais-je vu, et comment s'appelait-il ? Cruelle énigme ! Sans être un jeune homme, c'était un homme jeune encore.  Ses traits, ses façons, toute son allure indiquaient un personnage inquiet, susceptible et ronchonneur.  Enfin l'omnibus arriva.  """)
