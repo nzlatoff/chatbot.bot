@@ -93,12 +93,20 @@ class Model:
     # encoder/decoder utils
 
     def encode(self, s):
+        """
+        Encode a string, or an array of strings, into an array (or a batch) of
+        machine-readable subwords.
+        """
         if isinstance(s, str):
             return np.array(self.enc.encode(s))
         elif isinstance(s, (list, tuple, np.ndarray)):
             return [self.enc.encode(ss) for ss in s]
 
     def decode(self, s):
+        """
+        Decode an array (or a batch) of machine-readable subwords into an array
+        of string(s).
+        """
         if isinstance(s[0], int):
             return np.array(self.enc.decode(s))
         elif isinstance(s, (list, tuple, np.ndarray)):
@@ -106,17 +114,25 @@ class Model:
 
     def pad_sequences(
         self,
-        seq,
+        sequences,
         maxlen=None,
         dtype="int32",
-        padding="pre", # both pre or post
-        truncating="pre",
+        padding="pre",  # both pre
+        truncating="pre",  # or post
         value=None,
     ):
+        """
+        Given an array of strings or tokens (variable lengths), will return a
+        square matrix of padded tokens (equal lengths). Options include:
+        padding 'pre' or 'post', truncating, according to maxlen, also
+        'pre' or 'post', and value, that which one pads with (if None, the
+        current encoder's token for space will be used).
+        """
+        # The pad value, space, often 220 in gpt-2
         if value is None:
-            value = self.enc.encode(' ')[0] # space, often 220 in gpt-2
+            value = self.enc.encode(" ")[0]
         return tf.keras.preprocessing.sequence.pad_sequences(
-            self.encode(seq),
+            self.encode(sequences),
             maxlen=maxlen,
             dtype=dtype,
             padding=padding,
@@ -184,8 +200,8 @@ class Model:
             past: None at first, will contain the matrices of attention for
             each step (remembered in the loop of self.sample, so that they
             don't need to be recomputed each time).
-        Returns
-        -------
+        Returns:
+        --------
             a dictionary containing:
                 - logits: probabilities for the next tokens at each step,
                           shape: (batch_size, n_tokens - 1, n_vocab)
@@ -287,7 +303,7 @@ class Model:
             return tokens, all_logits
 
     # --------------------------------------------------------------------------------
-    # plumbing:
+    # Plumbing:
     # ---------
     # - load checkpoint
     # - change hparams
@@ -316,7 +332,9 @@ class Model:
             batch_size = self.batch_size
         else:
             if batch_size != self.batch_size:
-                print("(batch size changed, resetting graph)")
+                print(
+                    f"(Batch size changed from {self.batch_size} to {batch_size}, resetting graph.)"
+                )
                 self.reset(batch_size=batch_size)
 
     def reset(
@@ -348,34 +366,39 @@ class Model:
     # Two following functions adapted from @gpt2ent:
     # https://github.com/gpt2ent/gpt-2-simple/blob/652fdab80131ce83f8f1b6fd00f597dd48ae2e36/gpt_2_simple/gpt_2.py#L504
 
-    def get_logits(self, context_tokens, batch_size=None, last_only=False):
+    def get_logits(self, context_tokens, last_only=False):
         """
         Generate the logits (probabilities of each token) at each step for a
-        given sequence of tokens.
+        given one or more sequences of tokens. If computing logits for a batch
+        of tokens, said batch must have been padded beforehand (all token
+        sequences must have the same length).
         Returns:
         --------
             logits: array of shape: (batch_size, n_tokens, n_vocab)
                     or, if last_only is True: (batch_size, 1, n_vocab)
         """
-        self.check_batch_size(batch_size)
-        # self.model, defined at initialization, returns logits & attention matrix
-        out = self.sess.run(
-            self.model, feed_dict={self.context: self.batch_size * [context_tokens]}
-        )
+        if not isinstance(context_tokens[0], (list, tuple, np.ndarray)):
+            self.check_batch_size(1)
+            context = self.batch_size * [context_tokens]
+        else:
+            self.check_batch_size(len(context_tokens))
+            context = context_tokens
+        logits = self.sess.run(self.model, feed_dict={self.context: context})["logits"]
         # all logits starting from the second token, n logits for n tokens
         # shape (batch_size, n_tokens, vocab_size)
         if not last_only:
-            return out["logits"]
+            return logits
         # logits for next token, None to keep dims intact
-        return out["logits"][None, -1, :]
+        return logits[:, None, -1, :]
 
     def get_perplexity(self, sentence=["\n"], batch_size=None, verbose=False):
         self.check_batch_size(batch_size)
         tkns = self.encode(sentence)
         len_tkns = len(tkns)
         logits = self.get_logits(context_tokens=tkns, batch_size=self.batch_size)[
-            None, :-1, :
-        ]  # None to keep dims intact
+            :, :-1, :
+        ]
+        # None to keep dims intact
         # don't take the last one (predicting the token after our sentence)
         # normalizing logits for numerical stability (does not affect the result)
         mu = np.mean(logits, axis=-1, keepdims=True)
