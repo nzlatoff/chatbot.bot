@@ -410,11 +410,12 @@ class Model:
         # most importantly: make all logits positive
         # logprobs = normalize(logits)
         logprobs = np.exp(logits)
+        seq_len = len(tkns[0])
+        batch_size = len(tkns)
+        # fairly elaborate use of array indexing to extract the appropriate
+        # logit at each step for our batch of sequences (faster than list comp)
         scores = np.nan_to_num(
-            [
-                [logprobs[j, i, token] for i, token in enumerate(seq[:-1])]
-                for j, seq in enumerate(tkns)
-            ]
+            [[[i] * seq_len for i in range(batch_size)], batch_size * [list(range(seq_len))], tkns]
         )
         perplexities = 2 ** (-np.mean(np.log2(scores), axis=-1))
         return perplexities
