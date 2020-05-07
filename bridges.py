@@ -403,19 +403,34 @@ class Model:
     def get_perplexity(self, sentences=["\n"]):
         if isinstance(sentences, str):
             sentences = [sentences]
-        tkns = self.pad_sequences(sentences)
-        # don't take the last one (predicting the token after our sentence)
-        logits = self.get_logits(context_tokens=tkns)[:, :-1, :]
-        # normalization between 0 and 1
-        # most importantly: make all logits positive
-        # logprobs = normalize(logits)
-        logprobs = np.exp(logits)
-        seq_len = len(tkns[0])
-        batch_size = len(tkns)
+        tkns = self.encode(sentences)
+        # assuming varying sequence lengths, just use a plain loop
+        # and run each of them through the network
+        perplexities = []
+        for seq in tkns:
+            shorten = True if len(seq) > 1 else False
+            # don't take the last one (predicting the token after our sentence)
+            logits = self.get_logits(context_tokens=seq)
+            if shorten:
+                logits = logits[:, :-1, :]
+            # normalization between 0 and 1
+            # (most importantly: it makes all logits positive)
+            # logprobs = normalize(logits)
+            # logprobs = np.exp(logits)
+
+            # exponentiate only the numbers after selection
+            trunc = seq[:-1] if shorten else seq
+            scores = np.nan_to_num(
+                np.exp([(logits[0, i, token]) for i, token in enumerate(trunc)])
+            )
+            perplexities.append(2 ** (-np.mean(np.log2(scores))))
+
+        # seq_len = len(tkns[0])
+        # batch_size = len(tkns)
         # fairly elaborate use of array indexing to extract the appropriate
         # logit at each step for our batch of sequences (faster than list comp)
-        scores = np.nan_to_num(
-            [[[i] * seq_len for i in range(batch_size)], batch_size * [list(range(seq_len))], tkns]
-        )
-        perplexities = 2 ** (-np.mean(np.log2(scores), axis=-1))
+        # (requires that all sequences be the same size)
+        # scores = np.nan_to_num(
+        #     [[[i] * seq_len for i in range(batch_size)], batch_size * [list(range(seq_len))], tkns]
+        # )
         return perplexities
