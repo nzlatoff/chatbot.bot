@@ -58,7 +58,7 @@ class Model:
         """
         self.check_batch_size(batch_size)
         context_tokens = self.batch_size * [self.encode(prefix)]
-        tkns, logits = self.sess.run(
+        tkns, logits, scores = self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
@@ -77,6 +77,8 @@ class Model:
             tokens: machine-readable subwords (from 1 to n_vocab)
             logits: probabilities for the next token at each step
                     shape: (batch_size, n_tokens - 1, n_vocab)
+            scores: sequence of logits (probs) for each sequence
+                    shape: (batch_size, n_tokens)
         """
         self.check_batch_size(batch_size)
         context_tokens = self.batch_size * [self.encode(prefix)]
@@ -243,11 +245,15 @@ class Model:
               arguments, loop_vars, will be.
             - loop_vars: the variables passed to the loop (body/cond).
             - back_prop: Nein!
+        Inputs
+        ------
+            - context: machine readable tokens, shape: (batch_size, n_tokens)
         Returns
         -------
             - tokens: machine-readable subwords
             - all_logits: probabilities for the next token at each step
                           shape: (batch_size, n_tokens, n_vocab)
+            - all_scores: probabilities at each step for the sampled tokens
         """
 
         with tf.name_scope("sample_sequence"):
@@ -256,7 +262,43 @@ class Model:
             # rather than leaving the last token transformer calculation to the while loop.
             context_output = self.step(context[:, :-1])
 
-            def body(all_logits, past, prev, output):
+            ## extract scores for existing context
+            def get_scores(context, context_output, scope="scores"):
+                seq_len = tf.shape(context)[-1]
+                # batch dim, shape: (batch_size, seq_len, 1)
+                # [[[0],[0],...],[[1],[1],...],...]
+                dim0 = tf.transpose(
+                    tf.reshape(
+                        tf.tile(tf.range(self.batch_size), [seq_len]),
+                        [seq_len, self.batch_size, 1],
+                    ),
+                    tf.constant([1, 0, 2]),
+                    name="dim0",
+                )
+                # seq dim, shape: (batch_size, seq_len, 1)
+                # [[[0],[1],...],[[0],[1],...],...]
+                dim1 = tf.reshape(
+                    tf.tile(tf.range(seq_len), [self.batch_size]),
+                    [self.batch_size, seq_len],
+                    name="dim1",
+                )[..., None]
+                # context holds the actual token indices
+                # shape: (batch_size, seq_len, 1), that is:
+                # [[[234],[22203],...],[[2388],[1144],...],...]
+                # all indices together as a tensor
+                # shape: (batch_size, seq_len, num_dims==3)
+                # add None at the end to make the shape adequate
+                indz = tf.concat([dim0, dim1, context[..., None]], axis=-1, name="indz")
+                # extract the logits & maintain dimension
+                # shape: (batch_size, seq_len)
+                scores = tf.gather_nd(context_output["logits"], indz)
+                return tf.reshape(
+                    scores, [self.batch_size, -1], name="squeeze-return-scores"
+                )
+
+            context_output["scores"] = get_scores(context[:, :-1], context_output)
+
+            def body(all_logits, all_scores, past, prev, output):
                 next_outputs = self.step(prev[:, tf.newaxis], past=past)
                 logits = next_outputs["logits"][:, -1, :] / tf.cast(
                     temperature, tf.float32
@@ -267,40 +309,57 @@ class Model:
                     logits = self.top_k_logits(logits, k=top_k)
                 # use the logits to sample an index from them (equivalent to a token)
                 samples = tf.random.categorical(logits, num_samples=1, dtype=tf.int32)
+                # create the index tensor:
+                # [[0, sample_batch_0], [1, tkn1_batch_1],...]
+                indz = tf.concat([tf.range(self.batch_size)[:, None], samples], axis=-1)
+                scores = tf.gather_nd(logits, indz)[..., None]  # extract the logits
                 return [
+                    # all logits
                     tf.concat([all_logits, next_outputs["logits"]], axis=-2),
+                    # all scores
+                    tf.concat([all_scores, scores], axis=-1),
+                    # all pasts/presents (attention matrices)
                     tf.concat([past, next_outputs["presents"]], axis=-2),
+                    # previous samples (last token)
                     tf.squeeze(samples, axis=[1]),
+                    # sequences (all tokens)
                     tf.concat([output, samples], axis=1),
                 ]
 
             def cond(*args):
                 return True
 
-            all_logits, _, _, tokens = tf.while_loop(
+            all_logits, all_scores, _, _, tokens = tf.while_loop(
                 cond=cond,
                 body=body,
                 maximum_iterations=length,
                 loop_vars=[
-                    context_output["logits"],
-                    context_output["presents"],
-                    context[:, -1],
-                    context,
+                    context_output["logits"],   # all logits
+                    context_output["scores"],   # all scores
+                    context_output["presents"], # pasts/presents
+                    context[:, -1],             # prev
+                    context,                    # output
                 ],
                 shape_invariants=[
+                    # all logits
                     tf.TensorShape([self.batch_size, None, self.hparams.n_vocab]),
+                    # all scores
+                    tf.TensorShape([self.batch_size, None]),
+                    # all pasts/presents (attention matrices)
                     tf.TensorShape(
                         model.past_shape(
                             hparams=self.hparams, batch_size=self.batch_size
                         )
                     ),
+                    # previous samples (last token)
                     tf.TensorShape([self.batch_size]),
+                    # sequences (all tokens)
                     tf.TensorShape([self.batch_size, None]),
                 ],
                 back_prop=False,
             )
 
-            return tokens, all_logits
+            return tokens, all_logits, all_scores
 
     # --------------------------------------------------------------------------------
     # Plumbing:
@@ -400,13 +459,44 @@ class Model:
             return logprobs, mu, lm, le
         return logprobs
 
-    def get_perplexity(self, sentences=["\n"]):
+    def _perplexities(self, scores):
+        """
+        Compute the perplexity given a batch of scores (computed by
+        self.run()).
+        Inputs
+        ------
+            - scores: shape: (batch_size, seq_len - 1)
+        Returns
+        -------
+            - perplexities: shape: (batch_size, 1)
+        """
+        return 2 ** (-np.mean(np.log2(np.exp(scores)), axis=-1, keepdims=True))
+
+    def get_perplexity(self, sentences=["\n"], verbose=False):
+        """
+        Compute perplexity score(s) for input sentence(s). Note: this assumes
+        unequal lengths for sentences. For freshly neuroned batches of equal
+        lengths, use the scores returned by self.run() and pass them to
+        _perplexities.
+        Inputs
+        ------
+            - sentences: str or array
+            - verbose: if True, also returns the arrays of sscores. Defaults to False.
+        Returns
+        -------
+            - perplexities: array of perplexity score(s).
+                            shape: (n_sentences,)
+            - scores (if verbose): array of scores at each step for each sentence.
+                            shape: (n_sentences, seq_len)
+                                   ! seq_len is the number of tokens after encoding
+        """
         if isinstance(sentences, str):
             sentences = [sentences]
         tkns = self.encode(sentences)
         # assuming varying sequence lengths, just use a plain loop
         # and run each of them through the network
         perplexities = []
+        all_scores = []
         for seq in tkns:
             shorten = True if len(seq) > 1 else False
             # don't take the last one (predicting the token after our sentence)
@@ -421,16 +511,21 @@ class Model:
             # exponentiate only the numbers after selection
             trunc = seq[:-1] if shorten else seq
             scores = np.nan_to_num(
-                np.exp([(logits[0, i, token]) for i, token in enumerate(trunc)])
+                [(logits[0, i, token]) for i, token in enumerate(trunc)]
             )
+            all_scores.append(scores)
+            scores = np.exp(scores)
             perplexities.append(2 ** (-np.mean(np.log2(scores))))
 
-        # seq_len = len(tkns[0])
-        # batch_size = len(tkns)
         # fairly elaborate use of array indexing to extract the appropriate
         # logit at each step for our batch of sequences (faster than list comp)
-        # (requires that all sequences be the same size)
+        # (requires that all sequences be the same size) (replaced by loop in sample)
+        # seq_len = len(tkns[0])
+        # batch_size = len(tkns)
         # scores = np.nan_to_num(
         #     [[[i] * seq_len for i in range(batch_size)], batch_size * [list(range(seq_len))], tkns]
         # )
+
+        if verbose:
+            return perplexities, all_scores
         return perplexities
