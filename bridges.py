@@ -17,7 +17,7 @@ os.environ["KMP_WARNINGS"] = "off"
 
 class Model:
     def __init__(
-        self, run_name="run1", device="/GPU:0", batch_size=1, top_k=0.0, top_p=0.0
+        self, run_name="run1", device="/GPU:0", batch_size=1
     ):
         self.config = tf.compat.v1.ConfigProto()
         self.config.gpu_options.allow_growth = True
@@ -33,17 +33,21 @@ class Model:
         self.context = tf.compat.v1.placeholder(tf.int32, [self.batch_size, None])
         self.length = tf.compat.v1.placeholder(tf.int32, ())
         self.temperature = tf.compat.v1.placeholder(tf.float32, ())
+        self.top_k = tf.compat.v1.placeholder(tf.int32, ())
+        self.top_p = tf.compat.v1.placeholder(tf.float32, ())
+        # required to load checkpoint
         self.model = model.model(hparams=self.hparams, X=self.context)
         self.load_checkpoint(f"checkpoint/{run_name}")
+        # sampling the network, self.output will be used throughout
         with tf.device(device):
             self.output = self.sample(
                 length=self.length,
                 context=self.context,
                 temperature=self.temperature,
-                top_k=top_k,
-                top_p=top_p,
+                top_k=self.top_k,
+                top_p=self.top_p,
             )
-        # spit out all these warnrings
+        # preemptively spit out all these warnrings
         self.dummy_run()
 
     # --------------------------------------------------------------------------------
@@ -51,7 +55,7 @@ class Model:
     # - generate text
     # - generate text & logits
 
-    def gen(self, prefix="\n", length=5, temperature=1, batch_size=None):
+    def gen(self, prefix="\n", length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None):
         """
         Higher level generation: input a sentence, get an array with n batches
         of continuations.
@@ -64,11 +68,13 @@ class Model:
                 self.length: length,
                 self.context: context_tokens,
                 self.temperature: temperature,
+                self.top_k: top_k,
+                self.top_p: top_p,
             },
         )
         return self.decode(tkns)
 
-    def run(self, prefix="\n", length=5, temperature=1, batch_size=None):
+    def run(self, prefix="\n", length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None):
         """
         Lower level generation: input a sentence, get n batches of generated
         tokens as well as the logits associated with each step.
@@ -88,6 +94,8 @@ class Model:
                 self.length: length,
                 self.context: context_tokens,
                 self.temperature: temperature,
+                self.top_k: top_k,
+                self.top_p: top_p,
             },
         )
 
@@ -303,10 +311,11 @@ class Model:
                 logits = next_outputs["logits"][:, -1, :] / tf.cast(
                     temperature, tf.float32
                 )
-                if top_p > 0.0:
-                    logits = self.top_p_logits(logits, p=top_p)
-                else:
-                    logits = self.top_k_logits(logits, k=top_k)
+                # going ever more flowy with a tf.cond, allowing for dynamic
+                # resetting of top_p & top_k during generation
+                def p(): return self.top_p_logits(logits, p=top_p)
+                def k(): return self.top_k_logits(logits, k=top_k)
+                logits = tf.cond(tf.greater(top_p, 0.0), p, k)
                 # use the logits to sample an index from them (equivalent to a token)
                 samples = tf.random.categorical(logits, num_samples=1, dtype=tf.int32)
                 # create the index tensor:
