@@ -153,7 +153,91 @@ class Model:
         )
 
     # --------------------------------------------------------------------------------
+    # Plumbing:
+    # ---------
+    # - reset: change batch_size and other options
+    #          (batch_size is reset automatically in most functions)
+    # - load checkpoint
+    # - change hparams
+    # - check & reset graph with new batch size
+    # - dummy run to clear out messages
+
+    def reset(
+        self, hparams_file=None, device="/GPU:0", batch_size=1, top_k=0.0, top_p=0.0
+    ):
+        self.check_hparams(hparams_file)
+        self.batch_size = batch_size
+        self.context = tf.compat.v1.placeholder(tf.int32, [self.batch_size, None])
+        self.model = model.model(hparams=self.hparams, X=self.context)
+        with tf.device(device):
+            self.output = self.sample(
+                length=self.length,
+                context=self.context,
+                temperature=self.temperature,
+                top_k=top_k,
+                top_p=top_p,
+            )
+
+    def load_checkpoint(self, path="checkpoint/run1"):
+        self.ckpt = tf.train.latest_checkpoint(path)
+        self.saver = tf.compat.v1.train.Saver(allow_empty=True)
+        self.sess.run(tf.compat.v1.global_variables_initializer())
+        print(f"Loading checkpoint {self.ckpt}")
+        self.saver.restore(self.sess, self.ckpt)
+
+    def check_hparams(self, hparams_file):
+        if hparams_file is not None:
+            print(f"Reloading hparams from file {hparams_file}")
+            with open(hparams_file) as f:
+                self.hparams.override_from_dict(json.load(f))
+
+    def check_batch_size(self, batch_size):
+        """
+        Returns self.batch_size if batch_size is None.
+        Else runs reset() to redraw the graph with a new batch_size.
+        """
+        if batch_size is None:
+            batch_size = self.batch_size
+        else:
+            if batch_size != self.batch_size:
+                print(
+                    f"(Batch size changed from {self.batch_size} to {batch_size}, resetting graph.)"
+                )
+                self.reset(batch_size=batch_size)
+
+    def dummy_run(self):
+        """
+        A dummy runs forces some libraries to open at the onset of the program,
+        clearing out messages and warnings.
+        """
+        self.run("A", length=1, batch_size=self.batch_size)
+
+
+    # --------------------------------------------------------------------------------
+    # Bowels
     # sampling utils
+    # - normalisation/softmax (not used in the end)
+    # - tok_k, top_p
+    # - generation step
+    # - sampling loop
+
+    def normalize(self, logits, verbose=False):
+        """
+        Normalize a tensor of logits + softmaxing it.
+        Inputs
+        ------
+            - logits shape: (batch_size, seq_len, n_vocab)
+        Returns
+        -------
+            - logprobs: shape: (batch_size, seq_len, n_vocab)
+        """
+        mu = np.mean(logits, axis=-1, keepdims=True)
+        lm = logits - mu
+        le = np.exp(lm)
+        logprobs = le / np.sum(le, axis=-1, keepdims=True)
+        if verbose:
+            return logprobs, mu, lm, le
+        return logprobs
 
     def top_k_logits(self, logits, k):
         """
@@ -380,66 +464,26 @@ class Model:
             return tokens, all_logits, all_scores
 
     # --------------------------------------------------------------------------------
-    # Plumbing:
-    # ---------
-    # - load checkpoint
-    # - change hparams
-    # - check & reset graph with new batch size
-    # - dummy run to clear out messages
-
-    def load_checkpoint(self, path="checkpoint/run1"):
-        self.ckpt = tf.train.latest_checkpoint(path)
-        self.saver = tf.compat.v1.train.Saver(allow_empty=True)
-        self.sess.run(tf.compat.v1.global_variables_initializer())
-        print(f"Loading checkpoint {self.ckpt}")
-        self.saver.restore(self.sess, self.ckpt)
-
-    def check_hparams(self, hparams_file):
-        if hparams_file is not None:
-            print(f"Reloading hparams from file {hparams_file}")
-            with open(hparams_file) as f:
-                self.hparams.override_from_dict(json.load(f))
-
-    def check_batch_size(self, batch_size):
-        """
-        Returns self.batch_size if batch_size is None.
-        Else runs reset() to redraw the graph with a new batch_size.
-        """
-        if batch_size is None:
-            batch_size = self.batch_size
-        else:
-            if batch_size != self.batch_size:
-                print(
-                    f"(Batch size changed from {self.batch_size} to {batch_size}, resetting graph.)"
-                )
-                self.reset(batch_size=batch_size)
-
-    def reset(
-        self, hparams_file=None, device="/GPU:0", batch_size=1, top_k=0.0, top_p=0.0
-    ):
-        self.check_hparams(hparams_file)
-        self.batch_size = batch_size
-        self.context = tf.compat.v1.placeholder(tf.int32, [self.batch_size, None])
-        self.model = model.model(hparams=self.hparams, X=self.context)
-        with tf.device(device):
-            self.output = self.sample(
-                length=self.length,
-                context=self.context,
-                temperature=self.temperature,
-                top_k=top_k,
-                top_p=top_p,
-            )
-
-    def dummy_run(self):
-        """
-        A dummy runs forces some libraries to open at the onset of the program,
-        clearing out messages and warnings.
-        """
-        self.run("A", length=1, batch_size=self.batch_size)
-
-    # --------------------------------------------------------------------------------
     # Perplexity works:
     # -----------------
+    # - _perplexities: to be used in combination with the output of run (which
+    #                  returns scores
+    # - get_logits: run existing tokens thru the network, returns logits
+    # - get_perplexity: gets perplexity for one or more existing sentences
+
+    def _perplexities(self, scores):
+        """
+        Compute the perplexity given a batch of scores (computed by
+        self.run()).
+        Inputs
+        ------
+            - scores: shape: (batch_size, seq_len - 1)
+        Returns
+        -------
+            - perplexities: shape: (batch_size, 1)
+        """
+        return 2 ** (-np.mean(np.log2(np.exp(np.nan_to_num(scores))), axis=-1, keepdims=True))
+
     # Two following functions adapted from @gpt2ent:
     # https://github.com/gpt2ent/gpt-2-simple/blob/652fdab80131ce83f8f1b6fd00f597dd48ae2e36/gpt_2_simple/gpt_2.py#L504
 
@@ -467,28 +511,6 @@ class Model:
             return logits
         # logits for next token, None to keep dims intact
         return logits[:, None, -1, :]
-
-    def normalize(self, logits, verbose=False):
-        mu = np.mean(logits, axis=-1, keepdims=True)
-        lm = logits - mu
-        le = np.exp(lm)
-        logprobs = le / np.sum(le, axis=-1, keepdims=True)
-        if verbose:
-            return logprobs, mu, lm, le
-        return logprobs
-
-    def _perplexities(self, scores):
-        """
-        Compute the perplexity given a batch of scores (computed by
-        self.run()).
-        Inputs
-        ------
-            - scores: shape: (batch_size, seq_len - 1)
-        Returns
-        -------
-            - perplexities: shape: (batch_size, 1)
-        """
-        return 2 ** (-np.mean(np.log2(np.exp(np.nan_to_num(scores))), axis=-1, keepdims=True))
 
     def get_perplexity(self, sentences=["\n"], verbose=False):
         """
