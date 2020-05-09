@@ -16,9 +16,7 @@ os.environ["KMP_WARNINGS"] = "off"
 
 
 class Model:
-    def __init__(
-        self, run_name="run1", device="/GPU:0", batch_size=1
-    ):
+    def __init__(self, run_name="run1", device="/GPU:0", batch_size=1):
         self.config = tf.compat.v1.ConfigProto()
         self.config.gpu_options.allow_growth = True
         self.config.graph_options.rewrite_options.layout_optimizer = (
@@ -55,7 +53,9 @@ class Model:
     # - generate text
     # - generate text & logits
 
-    def gen(self, prefix="\n", length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None):
+    def gen(
+        self, prefix="\n", length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None
+    ):
         """
         Higher level generation: input a sentence, get an array with n batches
         of continuations.
@@ -74,7 +74,9 @@ class Model:
         )
         return self.decode(tkns)
 
-    def run(self, prefix="\n", length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None):
+    def run(
+        self, prefix="\n", length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None
+    ):
         """
         Lower level generation: input a sentence, get n batches of generated
         tokens as well as the logits associated with each step.
@@ -268,10 +270,11 @@ class Model:
             # Don't feed the last context token -- leave that to the loop below
             # TODO: Would be slightly faster if we called step on the entire context,
             # rather than leaving the last token transformer calculation to the while loop.
+
             context_output = self.step(context[:, :-1])
 
             ## extract scores for existing context
-            def get_scores(context, context_output, scope="scores"):
+            def get_scores(context, logits, scope="scores"):
                 seq_len = tf.shape(context)[-1]
                 # batch dim, shape: (batch_size, seq_len, 1)
                 # [[[0],[0],...],[[1],[1],...],...]
@@ -299,27 +302,33 @@ class Model:
                 indz = tf.concat([dim0, dim1, context[..., None]], axis=-1, name="indz")
                 # extract the logits & maintain dimension
                 # shape: (batch_size, seq_len)
-                scores = tf.gather_nd(context_output["logits"], indz)
+                scores = tf.gather_nd(logits, indz)
                 return tf.reshape(
                     scores, [self.batch_size, -1], name="squeeze-return-scores"
                 )
 
-            context_output["scores"] = get_scores(context[:, :-1], context_output)
+            # only get scores from the first token onward
+            context_output["scores"] = get_scores(context[:, 1:], context_output["logits"])
 
             def body(all_logits, all_scores, past, prev, output):
-                next_outputs = self.step(prev[:, tf.newaxis], past=past)
+                next_outputs = self.step(prev[:, None], past=past)
                 logits = next_outputs["logits"][:, -1, :] / tf.cast(
                     temperature, tf.float32
                 )
                 # going ever more flowy with a tf.cond, allowing for dynamic
                 # resetting of top_p & top_k during generation
-                def p(): return self.top_p_logits(logits, p=top_p)
-                def k(): return self.top_k_logits(logits, k=top_k)
+                def p():
+                    return self.top_p_logits(logits, p=top_p)
+
+                def k():
+                    return self.top_k_logits(logits, k=top_k)
+
                 logits = tf.cond(tf.greater(top_p, 0.0), p, k)
                 # use the logits to sample an index from them (equivalent to a token)
+                # sample shape: (batch_size, 1)
                 samples = tf.random.categorical(logits, num_samples=1, dtype=tf.int32)
                 # create the index tensor:
-                # [[0, sample_batch_0], [1, tkn1_batch_1],...]
+                # [[0, sample_batch_0], [1, sample_batch_1],...]
                 indz = tf.concat([tf.range(self.batch_size)[:, None], samples], axis=-1)
                 scores = tf.gather_nd(logits, indz)[..., None]  # extract the logits
                 return [
@@ -508,8 +517,8 @@ class Model:
         all_scores = []
         for seq in tkns:
             shorten = True if len(seq) > 1 else False
-            # don't take the last one (predicting the token after our sentence)
             logits = self.get_logits(context_tokens=seq)
+            # don't take the last one (predicting the token after our sentence)
             if shorten:
                 logits = logits[:, :-1, :]
             # normalization between 0 and 1
