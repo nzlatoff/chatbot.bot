@@ -488,7 +488,7 @@ class Model:
         -------
             - perplexities: shape: (batch_size, 1)
         """
-        return 2 ** (-np.mean(np.log2(np.exp(scores)), axis=-1, keepdims=True))
+        return 2 ** (-np.mean(np.log2(np.exp(np.nan_to_num(scores))), axis=-1, keepdims=True))
 
     def get_perplexity(self, sentences=["\n"], verbose=False):
         """
@@ -526,14 +526,13 @@ class Model:
             # logprobs = normalize(logits)
             # logprobs = np.exp(logits)
 
-            # exponentiate only the numbers after selection
-            trunc = seq[:-1] if shorten else seq
+            trunc = seq[1:] if shorten else seq
             scores = np.nan_to_num(
                 [(logits[0, i, token]) for i, token in enumerate(trunc)]
             )
             all_scores.append(scores)
-            scores = np.exp(scores)
-            perplexities.append(2 ** (-np.mean(np.log2(scores))))
+            # exponentiate only the numbers after selection
+            perplexities.append(2 ** (-np.mean(np.log2(np.exp(scores)))))
 
         # fairly elaborate use of array indexing to extract the appropriate
         # logit at each step for our batch of sequences (faster than list comp)
