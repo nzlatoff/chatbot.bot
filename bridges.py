@@ -87,10 +87,12 @@ class Model:
                     shape: (batch_size, n_tokens - 1, n_vocab)
             scores: sequence of logits (probs) for each sequence
                     shape: (batch_size, n_tokens)
+            perplexities: the perplexity for each sentence
+                    shape: (batch_size, 1)
         """
         self.check_batch_size(batch_size)
         context_tokens = self.batch_size * [self.encode(prefix)]
-        return self.sess.run(
+        tokens, logits = self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
@@ -100,6 +102,18 @@ class Model:
                 self.top_p: top_p,
             },
         )
+
+        # extract scores & calculate perplexities
+        seq_len = len(tokens[0]) - 1
+        indz = (
+            tuple(((i,) * seq_len for i in range(self.batch_size))),
+            self.batch_size * (tuple(range(seq_len)),),
+            tuple(tuple(tkn) for tkn in tokens[:, 1:]),
+        )
+        scores = logits[indz]
+        perplexities = self._perplexities(scores)
+
+        return tokens, logits, scores, perplexities
 
     # --------------------------------------------------------------------------------
     # encoder/decoder utils
@@ -211,7 +225,6 @@ class Model:
         clearing out messages and warnings.
         """
         self.run("A", length=1, batch_size=self.batch_size)
-
 
     # --------------------------------------------------------------------------------
     # Bowels
@@ -357,44 +370,7 @@ class Model:
 
             context_output = self.step(context[:, :-1])
 
-            ## extract scores for existing context
-            def get_scores(context, logits, scope="scores"):
-                seq_len = tf.shape(context)[-1]
-                # batch dim, shape: (batch_size, seq_len, 1)
-                # [[[0],[0],...],[[1],[1],...],...]
-                dim0 = tf.transpose(
-                    tf.reshape(
-                        tf.tile(tf.range(self.batch_size), [seq_len]),
-                        [seq_len, self.batch_size, 1],
-                    ),
-                    tf.constant([1, 0, 2]),
-                    name="dim0",
-                )
-                # seq dim, shape: (batch_size, seq_len, 1)
-                # [[[0],[1],...],[[0],[1],...],...]
-                dim1 = tf.reshape(
-                    tf.tile(tf.range(seq_len), [self.batch_size]),
-                    [self.batch_size, seq_len],
-                    name="dim1",
-                )[..., None]
-                # context holds the actual token indices
-                # shape: (batch_size, seq_len, 1), that is:
-                # [[[234],[22203],...],[[2388],[1144],...],...]
-                # all indices together as a tensor
-                # shape: (batch_size, seq_len, num_dims==3)
-                # add None at the end to make the shape adequate
-                indz = tf.concat([dim0, dim1, context[..., None]], axis=-1, name="indz")
-                # extract the logits & maintain dimension
-                # shape: (batch_size, seq_len)
-                scores = tf.gather_nd(logits, indz)
-                return tf.reshape(
-                    scores, [self.batch_size, -1], name="squeeze-return-scores"
-                )
-
-            # only get scores from the first token onward
-            context_output["scores"] = get_scores(context[:, 1:], context_output["logits"])
-
-            def body(all_logits, all_scores, past, prev, output):
+            def body(all_logits, past, prev, output):
                 next_outputs = self.step(prev[:, None], past=past)
                 logits = next_outputs["logits"][:, -1, :] / tf.cast(
                     temperature, tf.float32
@@ -411,15 +387,10 @@ class Model:
                 # use the logits to sample an index from them (equivalent to a token)
                 # sample shape: (batch_size, 1)
                 samples = tf.random.categorical(logits, num_samples=1, dtype=tf.int32)
-                # create the index tensor:
-                # [[0, sample_batch_0], [1, sample_batch_1],...]
-                indz = tf.concat([tf.range(self.batch_size)[:, None], samples], axis=-1)
-                scores = tf.gather_nd(logits, indz)[..., None]  # extract the logits
+
                 return [
                     # all logits
                     tf.concat([all_logits, next_outputs["logits"]], axis=-2),
-                    # all scores
-                    tf.concat([all_scores, scores], axis=-1),
                     # all pasts/presents (attention matrices)
                     tf.concat([past, next_outputs["presents"]], axis=-2),
                     # previous samples (last token)
@@ -431,13 +402,12 @@ class Model:
             def cond(*args):
                 return True
 
-            all_logits, all_scores, _, _, tokens = tf.while_loop(
+            all_logits, _, _, tokens = tf.while_loop(
                 cond=cond,
                 body=body,
                 maximum_iterations=length,
                 loop_vars=[
                     context_output["logits"],   # all logits
-                    context_output["scores"],   # all scores
                     context_output["presents"], # pasts/presents
                     context[:, -1],             # prev
                     context,                    # output
@@ -445,8 +415,6 @@ class Model:
                 shape_invariants=[
                     # all logits
                     tf.TensorShape([self.batch_size, None, self.hparams.n_vocab]),
-                    # all scores
-                    tf.TensorShape([self.batch_size, None]),
                     # all pasts/presents (attention matrices)
                     tf.TensorShape(
                         model.past_shape(
@@ -461,7 +429,7 @@ class Model:
                 back_prop=False,
             )
 
-            return tokens, all_logits, all_scores
+            return tokens, all_logits
 
     # --------------------------------------------------------------------------------
     # Perplexity works:
@@ -482,7 +450,9 @@ class Model:
         -------
             - perplexities: shape: (batch_size, 1)
         """
-        return 2 ** (-np.mean(np.log2(np.exp(np.nan_to_num(scores))), axis=-1, keepdims=True))
+        return 2 ** (
+            -np.mean(np.log2(np.exp(np.nan_to_num(scores))), axis=-1, keepdims=True)
+        )
 
     # Two following functions adapted from @gpt2ent:
     # https://github.com/gpt2ent/gpt-2-simple/blob/652fdab80131ce83f8f1b6fd00f597dd48ae2e36/gpt_2_simple/gpt_2.py#L504
@@ -568,3 +538,17 @@ class Model:
         if verbose:
             return perplexities, all_scores
         return perplexities
+
+if __name__ == "__main__":
+    m = Model(batch_size=20)
+    tokens, logits, scores, perplexities = m.run("LE COMTE.", length=200)
+    indz = perplexities[:,0].argsort()[::-1] # https://stackoverflow.com/a/2828121
+    sorted_perplexities = perplexities[indz]
+    sorted_seqs = tokens[indz]
+
+    print("--------------------------------")
+    for perp, sentence in zip(sorted_perplexities, m.decode(sorted_seqs)):
+        print()
+        print(sentence)
+        print(f"\t\t\t\t---> perplexity: {perp[0]:.16f}")
+        print("--------------------------------")
