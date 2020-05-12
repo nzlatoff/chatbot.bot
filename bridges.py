@@ -1,7 +1,7 @@
 import sys
 sys.path.append('src')
 import numpy as np
-# from bridges import Model
+from bridges import Model
 
 # model that generates and computes the logits for the forward
 # prediction of the tokens
