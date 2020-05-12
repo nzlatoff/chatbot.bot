@@ -509,11 +509,11 @@ class Model:
         if isinstance(sentences, str):
             sentences = [sentences]
         tkns = self.encode(sentences)
+        if verbose: count_tkns = len(tkns) # just for formatting purposes
         # assuming varying sequence lengths, just use a plain loop
         # and run each of them through the network
         perplexities = []
         all_scores = []
-        count = 0
         if verbose:
             msg = "calculating perplexity of existing sentences:"
             print(msg)
@@ -535,9 +535,8 @@ class Model:
             if mode == "mean":
                 perplexity = 2 ** (-np.mean(np.log2(np.exp(scores))))
             if verbose:
-                print(f"{count+1} | {perplexity} | {sentences[i]}")
+                print(f"{i+1:count_tkns} | {perplexity:20.17} | {sentences[i]}")
             perplexities.append(perplexity)
-            count += 1
         print()
         if return_scores:
             return np.array(perplexities), np.array(all_scores)
