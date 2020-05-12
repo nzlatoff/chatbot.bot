@@ -68,7 +68,8 @@ print(bw_strands)
 print("-" * 40)
 
 possible_bridges = generate_possible_bridges(fw_strands, bw_strands)
-perps = fw_model.get_perplexity(possible_bridges, verbose=True, mode="max")
+mode = "max"
+perps = fw_model.get_perplexity(possible_bridges, verbose=True, mode=mode)
 print("-" * 40)
 print()
 
@@ -78,7 +79,7 @@ sorted_bridges = possible_bridges[sorted_indz]
 
 if not os.path.isdir("results"):
     os.mkdir("results")
-fname = os.path.join("results", time.strftime("%Y-%m-%d-%H:%M:%S.txt"))
+fname = os.path.join("results", time.strftime(f"%Y-%m-%d-%H:%M:%S-{mode}.txt"))
 with open(fname, "w") as o:
     print("now the results sorted:")
     for sentence, perp in zip(possible_bridges, sorted_perps):
