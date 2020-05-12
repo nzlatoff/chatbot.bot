@@ -539,7 +539,7 @@ class Model:
             perplexities.append(perplexity)
             count += 1
         print()
-        if verbose:
+        if return_scores:
             return np.array(perplexities), np.array(all_scores)
         return np.array(perplexities)
 
