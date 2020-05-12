@@ -1,6 +1,6 @@
 import re
 import numpy as np
-from bridger import Model
+from gpt import Model
 
 # model that generates and computes the logits for the forward
 # prediction of the tokens

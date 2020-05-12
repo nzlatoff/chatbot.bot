@@ -482,7 +482,9 @@ class Model:
         # logits for next token, None to keep dims intact
         return logits[:, None, -1, :]
 
-    def get_perplexity(self, sentences=["\n"], verbose=False):
+    def get_perplexity(
+        self, sentences=["\n"], mode="max", return_scores=False, verbose=False
+    ):
         """
         Compute perplexity score(s) for input sentence(s). Note: this assumes
         unequal lengths for sentences. For freshly neuroned batches of equal
@@ -491,7 +493,11 @@ class Model:
         Inputs
         ------
             - sentences: str or array
-            - verbose: if True, also returns the arrays of sscores. Defaults to False.
+            - mode: 'max': take the maximum score for each sequence.
+                    'mean': takes the mean + 2**log2(exp(scores)).
+                    Defaults to 'max'.
+            - return_scores: if True returns the arrays of scores. Defaults to False.
+            - verbose: print the progress made. Defaults to false.
         Returns
         -------
             - perplexities: array of perplexity score(s).
@@ -508,45 +514,39 @@ class Model:
         perplexities = []
         all_scores = []
         count = 0
-        for seq in tkns:
+        if verbose:
+            print()
+            print("calculating perplexity of existing sentences:")
+        for i, seq in enumerate(tkns):
             shorten = True if len(seq) > 1 else False
             logits = self.get_logits(context_tokens=seq)
             # don't take the last one (predicting the token after our sentence)
             if shorten:
                 logits = logits[:, :-1, :]
-            # normalization between 0 and 1
-            # (most importantly: it makes all logits positive)
-            # logprobs = normalize(logits)
-            # logprobs = np.exp(logits)
-
             trunc = seq[1:] if shorten else seq
             scores = np.nan_to_num(
                 [(logits[0, i, token]) for i, token in enumerate(trunc)]
             )
             all_scores.append(scores)
             # exponentiate only the numbers after selection
-            perplexity = 2 ** (-np.mean(np.log2(np.exp(scores))))
-            print(f"{count+1} | {perplexity}")
+            if mode == "max":
+                perplexity = max(scores)
+            if mode == "mean":
+                perplexity = 2 ** (-np.mean(np.log2(np.exp(scores))))
+            if verbose:
+                print(f"{count+1} | {perplexity} | {sentences[i]}")
             perplexities.append(perplexity)
             count += 1
-
-        # fairly elaborate use of array indexing to extract the appropriate
-        # logit at each step for our batch of sequences (faster than list comp)
-        # (requires that all sequences be the same size) (replaced by loop in sample)
-        # seq_len = len(tkns[0])
-        # batch_size = len(tkns)
-        # scores = np.nan_to_num(
-        #     [[[i] * seq_len for i in range(batch_size)], batch_size * [list(range(seq_len))], tkns]
-        # )
 
         if verbose:
             return np.array(perplexities), np.array(all_scores)
         return np.array(perplexities)
 
+
 if __name__ == "__main__":
     m = Model(batch_size=20)
     tokens, logits, scores, perplexities = m.run("LE COMTE.", length=200)
-    indz = perplexities[:,0].argsort()[::-1] # https://stackoverflow.com/a/2828121
+    indz = perplexities[:, 0].argsort()[::-1]  # https://stackoverflow.com/a/2828121
     sorted_perplexities = perplexities[indz]
     sorted_seqs = tokens[indz]
 
