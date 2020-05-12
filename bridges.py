@@ -79,7 +79,7 @@ sorted_bridges = possible_bridges[sorted_indz]
 if not os.path.isdir("results"):
     os.mkdir("results")
 fname = os.path.join("results", time.strftime("%Y-%m-%d-%H:%M:%S.txt"))
-with open(fname) as o:
+with open(fname, "w") as o:
     for sentence, perp in zip(possible_bridges, sorted_perps):
         stat = f"perp: {perp:.16f} | {sentence}"
         print(stat)
