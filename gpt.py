@@ -535,7 +535,7 @@ class Model:
             if mode == "mean":
                 perplexity = 2 ** (-np.mean(np.log2(np.exp(scores))))
             if verbose:
-                print(f"{i+1:count_tkns} | {perplexity:20.17} | {sentences[i]}")
+                print(f"{i+1:{count_tkns}} | {perplexity:20.17} | {sentences[i]}")
             perplexities.append(perplexity)
         print()
         if return_scores:
