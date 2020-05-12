@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=0 python bridges.py
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src python bridges.py

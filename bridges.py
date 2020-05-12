@@ -1,5 +1,3 @@
-import sys
-sys.path.append("src")
 import re
 import numpy as np
 from bridger import Model
