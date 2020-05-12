@@ -62,7 +62,7 @@ class Model:
         """
         self.check_batch_size(batch_size)
         context_tokens = self.batch_size * [self.encode(prefix)]
-        tkns, logits, scores = self.sess.run(
+        tkns, logits = self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
