@@ -20,7 +20,7 @@ bw_strands_rev = bw_model.gen(prefix=suffix, length=5)
 
 # cuts the strand so that we don't end it in the middle of a word
 def cleanup_strand(strand):
-    return strand[: strand.rfind(" ")]
+    return re.sub(r"[\t\n\s]+", " ", strand[: strand.rfind(" ")])
 
 
 # cut at the last space
@@ -28,7 +28,7 @@ fw_strands = [cleanup_strand(fw_strand) for fw_strand in fw_model.decode(fw_toke
 bw_strands = [cleanup_strand(strand_rev)[::-1] for strand_rev in bw_strands_rev]
 
 # these are the locations where we may want to cut the strands for recombinations
-pattern = r"[\t\n\s]"
+pattern = r"\s"
 all_fw_cut_indices = [
     [match.start() for match in re.finditer(pattern, fw_strand)]
     for fw_strand in fw_strands
@@ -54,7 +54,7 @@ def generate_possible_bridges(fw_strands, bw_strands):
                     print(f"{br_clean}")
                     possible_bridges.append(possible_bridge)
                     count += 1
-    print("-"*40)
+    print("-" * 40)
     print(f"count: {count}")
     print()
     return np.array(possible_bridges)
@@ -86,5 +86,5 @@ with open(fname, "w") as o:
         stat = f"perp: {perp:21.17f} | {sentence}"
         print(stat)
         o.write(stat + "\n")
-print("-"*40)
+print("-" * 40)
 print(f"written results to {fname}")
