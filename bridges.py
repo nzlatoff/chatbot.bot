@@ -80,9 +80,10 @@ if not os.path.isdir("results"):
     os.mkdir("results")
 fname = os.path.join("results", time.strftime("%Y-%m-%d-%H:%M:%S.txt"))
 with open(fname, "w") as o:
+    print("now the results sorted:")
     for sentence, perp in zip(possible_bridges, sorted_perps):
-        stat = f"perp: {perp:.16f} | {sentence}"
+        stat = f"perp: {perp:21.17f} | {sentence}"
         print(stat)
         o.write(stat + "\n")
 print("-"*40)
-print("written results to {fname}")
+print(f"written results to {fname}")
