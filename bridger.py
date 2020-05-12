@@ -507,6 +507,7 @@ class Model:
         # and run each of them through the network
         perplexities = []
         all_scores = []
+        count = 0
         for seq in tkns:
             shorten = True if len(seq) > 1 else False
             logits = self.get_logits(context_tokens=seq)
@@ -524,7 +525,10 @@ class Model:
             )
             all_scores.append(scores)
             # exponentiate only the numbers after selection
-            perplexities.append(2 ** (-np.mean(np.log2(np.exp(scores)))))
+            perplexity = 2 ** (-np.mean(np.log2(np.exp(scores))))
+            print(f"{count+1} | {perplexity}")
+            perplexities.append(perplexity)
+            count += 1
 
         # fairly elaborate use of array indexing to extract the appropriate
         # logit at each step for our batch of sequences (faster than list comp)
@@ -536,8 +540,8 @@ class Model:
         # )
 
         if verbose:
-            return perplexities, all_scores
-        return perplexities
+            return np.array(perplexities), np.array(all_scores)
+        return np.array(perplexities)
 
 if __name__ == "__main__":
     m = Model(batch_size=20)
