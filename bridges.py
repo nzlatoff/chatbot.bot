@@ -25,23 +25,21 @@ def cleanup_strand(strand):
 fw_strands = [cleanup_strand(fw_strand) for fw_strand in fw_model.decode(fw_tokens)]
 bw_strands = [cleanup_strand(strand_rev)[::-1] for strand_rev in bw_strands_rev]
 
-# fw_strands = ["Et à nous les tunnels, ma gente demoiselle. ", "Et ainsi, nous serons les rois de l'infrastructure... ", "Et à vous les aéroplanes, belles personnes "]
-# bw_strands = [" Ils souffrirent deux ou trois lustres.", " Je les avais prévenus, mais ils n'en firent qu'à leur tête."]
-
 # these are the locations where we may want to cut the strands for recombinations
+pattern = r"[\t\n\s]"
 all_fw_cut_indices = [
-    [i for i, letter in enumerate(fw_strand) if letter == " "]
+    [match.start() for match in re.finditer(pattern, fw_strand)]
     for fw_strand in fw_strands
 ]
 all_bw_cut_indices = [
-    [i for i, letter in enumerate(bw_strand) if letter == " "]
+    [match.start() for match in re.finditer(pattern, bw_strand)]
     for bw_strand in bw_strands
 ]
 
 # returns a (fairly long) list of possible bridges, that we will then evaluate
 # through their forward likelihood
 def generate_possible_bridges(fw_strands, bw_strands):
-    print('inside the possibilities')
+    print("inside the possibilities")
     count = 0
     possible_bridges = []
     for (fw_strand, fw_cut_indices) in zip(fw_strands, all_fw_cut_indices):
@@ -53,7 +51,7 @@ def generate_possible_bridges(fw_strands, bw_strands):
                     br_clean = re.sub(r"(\t|\n)", " ", possible_bridge)
                     print(f"{br_clean}")
                     possible_bridges.append(possible_bridge)
-                    count +=1
+                    count += 1
     print()
     print(f"count: {count}")
     return np.array(possible_bridges)
@@ -61,18 +59,19 @@ def generate_possible_bridges(fw_strands, bw_strands):
 
 print("forward strands:")
 print(fw_strands)
-print('-'*40)
+print("-" * 40)
 print("backward strands:")
 print(bw_strands)
-print('-'*40)
+print("-" * 40)
 
 possible_bridges = generate_possible_bridges(fw_strands, bw_strands)
-print('-'*40)
+perps = fw_model.get_perplexity(possible_bridges, verbose=True, mode="max")
+print("-" * 40)
 print()
-print('now perplexiculating...')
-perps = fw_model.get_perplexity(possible_bridges)
-# https://stackoverflow.com/a/6979121
-sorted_indz = sorted(range(len(perps)), key=perps.__getitem__)
+
+sorted_indz = sorted(
+    range(len(perps)), key=perps.__getitem__
+)  # https://stackoverflow.com/a/6979121
 sorted_perps = perps[sorted_indz]
 sorted_bridges = possible_bridges[sorted_indz]
 for sentence, perp in zip(possible_bridges, sorted_perps):
