@@ -515,8 +515,9 @@ class Model:
         all_scores = []
         count = 0
         if verbose:
-            print()
-            print("calculating perplexity of existing sentences:")
+            msg = "calculating perplexity of existing sentences:"
+            print(msg)
+            print("-"*len(msg))
         for i, seq in enumerate(tkns):
             shorten = True if len(seq) > 1 else False
             logits = self.get_logits(context_tokens=seq)
@@ -537,7 +538,7 @@ class Model:
                 print(f"{count+1} | {perplexity} | {sentences[i]}")
             perplexities.append(perplexity)
             count += 1
-
+        print()
         if verbose:
             return np.array(perplexities), np.array(all_scores)
         return np.array(perplexities)
