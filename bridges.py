@@ -1,4 +1,6 @@
+import os
 import re
+import time
 import numpy as np
 from gpt import Model
 
@@ -70,8 +72,17 @@ perps = fw_model.get_perplexity(possible_bridges, verbose=True, mode="max")
 print("-" * 40)
 print()
 
-sorted_indz = perps[:, 0].argsort()[::-1]  # https://stackoverflow.com/a/2828121
+sorted_indz = perps.argsort()
 sorted_perps = perps[sorted_indz]
 sorted_bridges = possible_bridges[sorted_indz]
-for sentence, perp in zip(possible_bridges, sorted_perps):
-    print(f"perp: {perp:.16f} | {sentence}")
+
+if not os.path.isdir("results"):
+    os.mkdir("results")
+fname = os.path.join("results", time.strftime("%Y-%m-%d-%H:%M:%S.txt"))
+with open(fname) as o:
+    for sentence, perp in zip(possible_bridges, sorted_perps):
+        stat = f"perp: {perp:.16f} | {sentence}"
+        print(stat)
+        o.write(stat + "\n")
+print("-"*40)
+print("written results to {fname}")
