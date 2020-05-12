@@ -52,8 +52,9 @@ def generate_possible_bridges(fw_strands, bw_strands):
                     print(f"{br_clean}")
                     possible_bridges.append(possible_bridge)
                     count += 1
-    print()
+    print("-"*40)
     print(f"count: {count}")
+    print()
     return np.array(possible_bridges)
 
 
@@ -69,9 +70,7 @@ perps = fw_model.get_perplexity(possible_bridges, verbose=True, mode="max")
 print("-" * 40)
 print()
 
-sorted_indz = sorted(
-    range(len(perps)), key=perps.__getitem__
-)  # https://stackoverflow.com/a/6979121
+sorted_indz = perps[:, 0].argsort()[::-1]  # https://stackoverflow.com/a/2828121
 sorted_perps = perps[sorted_indz]
 sorted_bridges = possible_bridges[sorted_indz]
 for sentence, perp in zip(possible_bridges, sorted_perps):
