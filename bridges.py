@@ -6,13 +6,15 @@ from gpt import Model
 
 # model that generates and computes the logits for the forward
 # prediction of the tokens
-fw_model = Model(run_name="forward", batch_size=1)
+fw_model = Model(run_name="forward", batch_size=3)
 # same as forwaerts, but for the backward prediction of the tokens
 # (trained on a dataset where all chars have been reverted)
-bw_model = Model(run_name="backward", batch_size=1)
+bw_model = Model(run_name="backward", batch_size=3)
 
 prefix = "Aha ! À nous les ponts !"
+prefix_end = len(prefix)
 suffix = "Et après ces travaux ils virent que les ponts étaient bons."[::-1]
+suffix_end = len(suffix)
 
 fw_tokens, _, scores, _ = fw_model.run(prefix=prefix, length=5)
 # the backwards strands are generated backwards
@@ -30,13 +32,29 @@ bw_strands = [cleanup_strand(strand_rev)[::-1] for strand_rev in bw_strands_rev]
 # these are the locations where we may want to cut the strands for recombinations
 pattern = r"\s"
 all_fw_cut_indices = [
-    [match.start() for match in re.finditer(pattern, fw_strand)]
+    [prefix_end + match.start() for match in re.finditer(pattern, fw_strand[prefix_end:])]
     for fw_strand in fw_strands
 ]
 all_bw_cut_indices = [
-    [match.start() for match in re.finditer(pattern, bw_strand)]
+    [match.start() for match in re.finditer(pattern, bw_strand[:-suffix_end])]
     for bw_strand in bw_strands
 ]
+
+# for indices,strand in zip(all_fw_cut_indices, fw_strands):
+#     for i in indices:
+#         print(i)
+#         print(strand)
+#         print(strand[:i], "|", strand[i:])
+#         print()
+
+# print("------")
+
+# for indices,strand in zip(all_bw_cut_indices, bw_strands):
+#     for i in indices:
+#         print(i)
+#         print(strand)
+#         print(strand[:i], "|", strand[i:])
+#         print()
 
 # returns a (fairly long) list of possible bridges, that we will then evaluate
 # through their forward likelihood
@@ -57,7 +75,7 @@ def generate_possible_bridges(fw_strands, bw_strands):
     print("-" * 40)
     print(f"count: {count}")
     print()
-    return np.array(possible_bridges)
+    return np.array(list(set(possible_bridges)))
 
 
 print("forward strands:")
@@ -68,7 +86,7 @@ print(bw_strands)
 print("-" * 40)
 
 possible_bridges = generate_possible_bridges(fw_strands, bw_strands)
-mode = "max"
+mode = "meanmin"
 perps = fw_model.get_perplexity(possible_bridges, verbose=True, mode=mode)
 print("-" * 40)
 print()
