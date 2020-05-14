@@ -530,10 +530,12 @@ class Model:
             )
             all_scores.append(scores)
             # exponentiate only the numbers after selection
-            if mode == "max":
-                perplexity = max(scores)
+            if mode == "min":
+                perplexity = min(scores)
             if mode == "mean":
-                perplexity = 2 ** (-np.mean(np.log2(np.exp(scores))))
+                perplexity = -np.mean(scores)
+            if mode == "meanmin":
+                perplexity = min(scores) - np.mean(scores)
             if verbose:
                 print(f"{i+1:{count_len}} | {perplexity:20.17f} | {sentences[i]}")
             perplexities.append(perplexity)
