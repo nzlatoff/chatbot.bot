@@ -68,9 +68,8 @@ def generate_possible_bridges(fw_strands, bw_strands):
                 for bw_index in bw_cut_indices:
                     # riddance of space in fw_strand, kept in bw_strand
                     possible_bridge = fw_strand[:fw_index] + bw_strand[bw_index:]
-                    br_clean = re.sub(r"(\t|\n)", " ", possible_bridge)
-                    print(f"{br_clean}")
-                    possible_bridges.append(possible_bridge)
+                    possible_bridge_cut = fw_strand[:fw_index] + " | " + bw_strand[bw_index:]
+                    possible_bridges.append((possible_bridge, possible_bridge_cut))
                     count += 1
     print("-" * 40)
     print(f"count: {count}")
@@ -87,13 +86,13 @@ print("-" * 40)
 
 possible_bridges = generate_possible_bridges(fw_strands, bw_strands)
 mode = "meanmin"
-perps = fw_model.get_perplexity(possible_bridges, verbose=True, mode=mode)
+perps = fw_model.get_perplexity(possible_bridges[:, 0], verbose=True, mode=mode)
 print("-" * 40)
 print()
 
 sorted_indz = perps.argsort()
 sorted_perps = perps[sorted_indz]
-sorted_bridges = possible_bridges[sorted_indz]
+sorted_bridges = possible_bridges[sorted_indz, 1]
 
 if not os.path.isdir("results"):
     os.mkdir("results")
