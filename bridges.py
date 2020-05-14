@@ -82,7 +82,7 @@ if not os.path.isdir("results"):
 fname = os.path.join("results", time.strftime(f"%Y-%m-%d-%H:%M:%S-{mode}.txt"))
 with open(fname, "w") as o:
     print("now the results sorted:")
-    for sentence, perp in zip(possible_bridges, sorted_perps):
+    for sentence, perp in zip(sorted_bridges, sorted_perps):
         stat = f"perp: {perp:21.17f} | {sentence}"
         print(stat)
         o.write(stat + "\n")
