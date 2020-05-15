@@ -8,19 +8,19 @@ from collections import defaultdict
 
 # model that generates and computes the logits for the forward
 # prediction of the tokens
-fw_model = Model(run_name="forward", batch_size=3)
+fw_model = Model(run_name="forward", batch_size=10)
 # same as forwaerts, but for the backward prediction of the tokens
 # (trained on a dataset where all chars have been reverted)
-bw_model = Model(run_name="backward", batch_size=3)
+bw_model = Model(run_name="backward", batch_size=10)
 
 prefix = "Aha ! À nous les ponts !"
 prefix_end = len(prefix)
 suffix = "Et après ces travaux ils virent que les ponts étaient bons."[::-1]
 suffix_end = len(suffix)
 
-fw_tokens, _, scores, _ = fw_model.run(prefix=prefix, length=50)
+fw_tokens, _, scores, _ = fw_model.run(prefix=prefix, length=200)
 # the backwards strands are generated backwards
-bw_strands_rev = bw_model.gen(prefix=suffix, length=50)
+bw_strands_rev = bw_model.gen(prefix=suffix, length=200)
 
 # cuts the strand so that we don't end it in the middle of a word
 def cleanup_strand(strand):
@@ -115,7 +115,7 @@ def generate_overlap_bridges(fw_strands, fw_cut_indices_lists, bw_strands, bw_cu
     bw_n_grams_lists = []
     for (bw_strand, bw_cut_indices) in zip(bw_strands, bw_cut_indices_lists):
         bw_set.update(generate_initial_n_grams(bw_strand, bw_cut_indices, n)[0])
-    
+
 
     fw_bw_intersection = fw_set.intersection(bw_set)
     print(fw_bw_intersection)
@@ -129,7 +129,7 @@ def generate_overlap_bridges(fw_strands, fw_cut_indices_lists, bw_strands, bw_cu
             if final_n_gram in fw_bw_intersection:
                 begin, end = begin_end
                 useful_fw_substrand = fw_strand[:end]
-                useful_fw_substrands[final_n_gram].append(useful_fw_substrand) 
+                useful_fw_substrands[final_n_gram].append(useful_fw_substrand)
 
     print('useful fw')
     print(useful_fw_substrands)
@@ -152,11 +152,11 @@ def generate_overlap_bridges(fw_strands, fw_cut_indices_lists, bw_strands, bw_cu
         n_gram_useful_bw_substrands = useful_bw_substrands[n_gram]
 
         fw_bw_pairs = itertools.product(n_gram_useful_fw_substrands, n_gram_useful_bw_substrands)
-        overlap_bridges.update([fw + bw for (fw, bw) in fw_bw_pairs])
-    
+        overlap_bridges.update([fw + "|****|" + bw for (fw, bw) in fw_bw_pairs])
+
     return overlap_bridges
 
-# fw_strands = ["a b c d e f g x", "x z f g k p q", "c a d f g h"] 
+# fw_strands = ["a b c d e f g x", "x z f g k p q", "c a d f g h"]
 # bw_strands = ['h i j f g x k c d l m n g d', 'h g g i a b j k l m o p', 'a a h i j s d m', 'a d d c d e f']
 
 # print('les strands')
@@ -193,7 +193,7 @@ for bridge in bridges:
     #         eligible_fw_substrands = []
     #         for fw_strand in fw_strands:
     #             fw_final_n_grams = set(generate_final_n_grams(fw_strand))
-                
+
     #             pass
     #         eligible_bw_substrands = []
     #         for bw_strand in bw_strands:
