@@ -18,9 +18,9 @@ prefix_end = len(prefix)
 suffix = "Et après ces travaux ils virent que les ponts étaient bons."[::-1]
 suffix_end = len(suffix)
 
-fw_tokens, _, scores, _ = fw_model.run(prefix=prefix, length=200)
+fw_tokens, _, scores, _ = fw_model.run(prefix=prefix, length=500)
 # the backwards strands are generated backwards
-bw_strands_rev = bw_model.gen(prefix=suffix, length=200)
+bw_strands_rev = bw_model.gen(prefix=suffix, length=500)
 
 # cuts the strand so that we don't end it in the middle of a word
 def cleanup_strand(strand):
@@ -204,10 +204,16 @@ while not bridges:
         fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
     )
 
-for bridge in bridges:
-    print("----")
-    print(*bridges, sep="\n")
-    print()
+
+if not os.path.isdir("overlaps"):
+    os.mkdir("overlaps")
+fname = os.path.join("overlaps", time.strftime(f"%Y-%m-%d-%H:%M:%S-{mode}.txt"))
+with open(fname, "w") as o:
+    for bridge in bridges:
+        print("----")
+        print(bridge)
+        o.write(bridge + "\n")
+        print()
 
     # select the fw_strand parts that gave something to the intersection
     # select the bw_strand parts that gave something to the intersection
