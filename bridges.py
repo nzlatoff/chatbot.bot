@@ -26,6 +26,7 @@ bw_strands_rev = bw_model.gen(prefix=suffix, length=200)
 def cleanup_strand(strand):
     return re.sub(r"[\t\n\s]+", " ", strand[: strand.rfind(" ")])
 
+
 # cut at the last space
 fw_strands = [cleanup_strand(fw_strand) for fw_strand in fw_model.decode(fw_tokens)]
 bw_strands = [cleanup_strand(strand_rev)[::-1] for strand_rev in bw_strands_rev]
@@ -33,7 +34,10 @@ bw_strands = [cleanup_strand(strand_rev)[::-1] for strand_rev in bw_strands_rev]
 # these are the locations where we may want to cut the strands for recombinations
 pattern = r"\s"
 all_fw_cut_indices = [
-    [prefix_end + match.start() for match in re.finditer(pattern, fw_strand[prefix_end:])]
+    [
+        prefix_end + match.start()
+        for match in re.finditer(pattern, fw_strand[prefix_end:])
+    ]
     for fw_strand in fw_strands
 ]
 all_bw_cut_indices = [
@@ -69,7 +73,9 @@ def generate_possible_bridges(fw_strands, bw_strands):
                 for bw_index in bw_cut_indices:
                     # riddance of space in fw_strand, kept in bw_strand
                     possible_bridge = fw_strand[:fw_index] + bw_strand[bw_index:]
-                    possible_bridge_cut = fw_strand[:fw_index] + " | " + bw_strand[bw_index:]
+                    possible_bridge_cut = (
+                        fw_strand[:fw_index] + " | " + bw_strand[bw_index:]
+                    )
                     possible_bridges.append((possible_bridge, possible_bridge_cut))
                     count += 1
     print("-" * 40)
@@ -82,32 +88,36 @@ def generate_final_n_grams(fw_strand, fw_cut_indices, n):
     n_grams = []
     begin_ends = []
 
-    fw_cut_indices = fw_cut_indices + [len(fw_strand)] # adds the end of the fw_strand
+    fw_cut_indices = fw_cut_indices + [len(fw_strand)]  # adds the end of the fw_strand
     for i in range(len(fw_cut_indices) - n):
-        n_gram_begin = fw_cut_indices[i] + 1 # (included in the n-gram)
-        n_gram_end = fw_cut_indices[i + n] # (not included in the n-gram)
+        n_gram_begin = fw_cut_indices[i] + 1  # (included in the n-gram)
+        n_gram_end = fw_cut_indices[i + n]  # (not included in the n-gram)
         n_gram = fw_strand[n_gram_begin:n_gram_end]
         n_grams.append(n_gram)
         begin_ends.append((n_gram_begin, n_gram_end))
     return (n_grams, begin_ends)
 
+
 def generate_initial_n_grams(bw_strand, bw_cut_indices, n):
     n_grams = []
     begin_ends = []
-     # adds the beginning of the bw_strand (-1 gets added with the +1 in n_gram_begin for i=0
+    # adds the beginning of the bw_strand (-1 gets added with the +1 in n_gram_begin for i=0
     bw_cut_indices = [-1] + bw_cut_indices
     for i in range(len(bw_cut_indices) - n):
-        n_gram_begin = bw_cut_indices[i] + 1 # (included in the n-gram)
-        n_gram_end = bw_cut_indices[i + n] # (not included in the n-gram)
+        n_gram_begin = bw_cut_indices[i] + 1  # (included in the n-gram)
+        n_gram_end = bw_cut_indices[i + n]  # (not included in the n-gram)
         n_gram = bw_strand[n_gram_begin:n_gram_end]
         n_grams.append(n_gram)
         begin_ends.append((n_gram_begin, n_gram_end))
     return (n_grams, begin_ends)
 
+
 # print(generate_final_n_grams("bonjour monsieur le prince machiavelique"), [7, 16, 19, 26], 2))
 
 
-def generate_overlap_bridges(fw_strands, fw_cut_indices_lists, bw_strands, bw_cut_indices_lists, n):
+def generate_overlap_bridges(
+    fw_strands, fw_cut_indices_lists, bw_strands, bw_cut_indices_lists, n
+):
     fw_set = set()
     bw_set = set()
     for (fw_strand, fw_cut_indices) in zip(fw_strands, fw_cut_indices_lists):
@@ -115,7 +125,6 @@ def generate_overlap_bridges(fw_strands, fw_cut_indices_lists, bw_strands, bw_cu
     bw_n_grams_lists = []
     for (bw_strand, bw_cut_indices) in zip(bw_strands, bw_cut_indices_lists):
         bw_set.update(generate_initial_n_grams(bw_strand, bw_cut_indices, n)[0])
-
 
     fw_bw_intersection = fw_set.intersection(bw_set)
     print(fw_bw_intersection)
@@ -128,21 +137,23 @@ def generate_overlap_bridges(fw_strands, fw_cut_indices_lists, bw_strands, bw_cu
         for (final_n_gram, begin_end) in zip(final_n_grams, begin_ends):
             if final_n_gram in fw_bw_intersection:
                 begin, end = begin_end
-                useful_fw_substrand = fw_strand[:end]
+                useful_fw_substrand = fw_strand[:begin]
                 useful_fw_substrands[final_n_gram].append(useful_fw_substrand)
 
-    print('useful fw')
+    print("useful fw")
     print(useful_fw_substrands)
 
     for (bw_strand, bw_cut_indices) in zip(bw_strands, bw_cut_indices_lists):
-        initial_n_grams, begin_ends = generate_initial_n_grams(bw_strand, bw_cut_indices, n)
+        initial_n_grams, begin_ends = generate_initial_n_grams(
+            bw_strand, bw_cut_indices, n
+        )
         for (initial_n_gram, begin_end) in zip(initial_n_grams, begin_ends):
             if initial_n_gram in fw_bw_intersection:
                 begin, end = begin_end
                 useful_bw_substrand = bw_strand[end:]
                 useful_bw_substrands[initial_n_gram].append(useful_bw_substrand)
 
-    print('useful bw')
+    print("useful bw")
     print(useful_bw_substrands)
 
     overlap_bridges = set()
@@ -151,10 +162,13 @@ def generate_overlap_bridges(fw_strands, fw_cut_indices_lists, bw_strands, bw_cu
         n_gram_useful_fw_substrands = useful_fw_substrands[n_gram]
         n_gram_useful_bw_substrands = useful_bw_substrands[n_gram]
 
-        fw_bw_pairs = itertools.product(n_gram_useful_fw_substrands, n_gram_useful_bw_substrands)
-        overlap_bridges.update([fw + "|****|" + bw for (fw, bw) in fw_bw_pairs])
+        fw_bw_pairs = itertools.product(
+            n_gram_useful_fw_substrands, n_gram_useful_bw_substrands
+        )
+        overlap_bridges.update([fw + "\033[0;31m" + n_gram + "\033[0m" + bw for (fw, bw) in fw_bw_pairs])
 
     return overlap_bridges
+
 
 # fw_strands = ["a b c d e f g x", "x z f g k p q", "c a d f g h"]
 # bw_strands = ['h i j f g x k c d l m n g d', 'h g g i a b j k l m o p', 'a a h i j s d m', 'a d d c d e f']
@@ -179,11 +193,20 @@ def generate_overlap_bridges(fw_strands, fw_cut_indices_lists, bw_strands, bw_cu
 #     for bw_strand in bw_strands
 # ]
 
-bridges = generate_overlap_bridges(fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, 2)
+n = 15
+bridges = generate_overlap_bridges(
+    fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
+)
+while not bridges:
+    print(f"found no bridge for n = {n}, retrying with {n-1}")
+    n = n - 1
+    bridges = generate_overlap_bridges(
+        fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
+    )
 
 for bridge in bridges:
     print("----")
-    print(*bridges, sep='\n')
+    print(*bridges, sep="\n")
     print()
 
     # select the fw_strand parts that gave something to the intersection
@@ -200,7 +223,6 @@ for bridge in bridges:
     #         for bw_strand in bw_strands:
     #             pass
     #     return fw_strand, bw_strand
-
 
 
 # print("forward strands:")
