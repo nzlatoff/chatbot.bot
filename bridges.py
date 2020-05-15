@@ -207,7 +207,7 @@ while not bridges:
 
 if not os.path.isdir("overlaps"):
     os.mkdir("overlaps")
-fname = os.path.join("overlaps", time.strftime(f"%Y-%m-%d-%H:%M:%S-{mode}.txt"))
+fname = os.path.join("overlaps", time.strftime(f"%Y-%m-%d-%H:%M:%S.txt"))
 with open(fname, "w") as o:
     for bridge in bridges:
         print("----")
