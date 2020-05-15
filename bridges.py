@@ -182,8 +182,9 @@ def generate_overlap_bridges(fw_strands, fw_cut_indices_lists, bw_strands, bw_cu
 bridges = generate_overlap_bridges(fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, 2)
 
 for bridge in bridges:
-    print('les bridges')
-    print(bridges)
+    print("----")
+    print(*bridges, sep='\n')
+    print()
 
     # select the fw_strand parts that gave something to the intersection
     # select the bw_strand parts that gave something to the intersection
