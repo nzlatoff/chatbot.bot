@@ -30,7 +30,7 @@ def cleanup_strand(strand):
 fw_strands = [cleanup_strand(fw_strand) for fw_strand in fw_model.decode(fw_tokens)]
 bw_strands = [cleanup_strand(strand_rev)[::-1] for strand_rev in bw_strands_rev]
 
-these are the locations where we may want to cut the strands for recombinations
+# these are the locations where we may want to cut the strands for recombinations
 pattern = r"\s"
 all_fw_cut_indices = [
     [prefix_end + match.start() for match in re.finditer(pattern, fw_strand[prefix_end:])]
