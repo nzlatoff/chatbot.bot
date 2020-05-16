@@ -8,42 +8,46 @@ from collections import defaultdict
 
 # model that generates and computes the logits for the forward
 # prediction of the tokens
-fw_model = Model(run_name="forward", batch_size=10)
+fw_model = Model(run_name="forward", batch_size=5)
 # same as forwaerts, but for the backward prediction of the tokens
 # (trained on a dataset where all chars have been reverted)
-bw_model = Model(run_name="backward", batch_size=10)
+bw_model = Model(run_name="backward", batch_size=5)
 
 prefix = "Aha ! À nous les ponts !"
 prefix_end = len(prefix)
 suffix = "Et après ces travaux ils virent que les ponts étaient bons."[::-1]
 suffix_end = len(suffix)
 
-fw_tokens, _, scores, _ = fw_model.run(prefix=prefix, length=500)
-# the backwards strands are generated backwards
-bw_strands_rev = bw_model.gen(prefix=suffix, length=500)
 
 # cuts the strand so that we don't end it in the middle of a word
 def cleanup_strand(strand):
     return re.sub(r"[\t\n\s]+", " ", strand[: strand.rfind(" ")])
 
+def generate(fw_model, bw_model, prefix, prefix_eend, suffix, suffix_end):
 
-# cut at the last space
-fw_strands = [cleanup_strand(fw_strand) for fw_strand in fw_model.decode(fw_tokens)]
-bw_strands = [cleanup_strand(strand_rev)[::-1] for strand_rev in bw_strands_rev]
+    fw_tokens, _, scores, _ = fw_model.run(prefix=prefix, length=500)
+    # the backwards strands are generated backwards
+    bw_strands_rev = bw_model.gen(prefix=suffix, length=500)
 
-# these are the locations where we may want to cut the strands for recombinations
-pattern = r"\s"
-all_fw_cut_indices = [
-    [
-        prefix_end + match.start()
-        for match in re.finditer(pattern, fw_strand[prefix_end:])
+    # cut at the last space
+    fw_strands = [cleanup_strand(fw_strand) for fw_strand in fw_model.decode(fw_tokens)]
+    bw_strands = [cleanup_strand(strand_rev)[::-1] for strand_rev in bw_strands_rev]
+
+    # these are the locations where we may want to cut the strands for recombinations
+    pattern = r"\s"
+    all_fw_cut_indices = [
+        [
+            prefix_end + match.start()
+            for match in re.finditer(pattern, fw_strand[prefix_end:])
+        ]
+        for fw_strand in fw_strands
     ]
-    for fw_strand in fw_strands
-]
-all_bw_cut_indices = [
-    [match.start() for match in re.finditer(pattern, bw_strand[:-suffix_end])]
-    for bw_strand in bw_strands
-]
+    all_bw_cut_indices = [
+        [match.start() for match in re.finditer(pattern, bw_strand[:-suffix_end])]
+        for bw_strand in bw_strands
+    ]
+    return fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices
+
 
 # for indices,strand in zip(all_fw_cut_indices, fw_strands):
 #     for i in indices:
@@ -165,7 +169,9 @@ def generate_overlap_bridges(
         fw_bw_pairs = itertools.product(
             n_gram_useful_fw_substrands, n_gram_useful_bw_substrands
         )
-        overlap_bridges.update([fw + "\033[0;31m" + n_gram + "\033[0m" + bw for (fw, bw) in fw_bw_pairs])
+        overlap_bridges.update(
+            [fw + "\033[0;31m" + n_gram + "\033[0m" + bw for (fw, bw) in fw_bw_pairs]
+        )
 
     return overlap_bridges
 
@@ -193,16 +199,29 @@ def generate_overlap_bridges(
 #     for bw_strand in bw_strands
 # ]
 
-n = 15
+fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices = generate(
+    fw_model, bw_model, prefix, prefix_eend, suffix, suffix_end
+)
+
+n = 5
 bridges = generate_overlap_bridges(
     fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
+
 )
+
 while not bridges:
-    print(f"found no bridge for n = {n}, retrying with {n-1}")
-    n = n - 1
+    print(f"found no bridge for n = {n}, retrying.")
+    fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices = generate(
+        fw_model, bw_model, prefix, prefix_eend, suffix, suffix_end
+    )
     bridges = generate_overlap_bridges(
         fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
     )
+    # print(f"found no bridge for n = {n}, retrying with {n-1}")
+    # n = n - 1
+    # bridges = generate_overlap_bridges(
+    #     fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
+    # )
 
 
 if not os.path.isdir("overlaps"):
