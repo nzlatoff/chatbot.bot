@@ -200,7 +200,7 @@ def generate_overlap_bridges(
 # ]
 
 fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices = generate(
-    fw_model, bw_model, prefix, prefix_eend, suffix, suffix_end
+    fw_model, bw_model, prefix, prefix_end, suffix, suffix_end
 )
 
 n = 5
@@ -212,7 +212,7 @@ bridges = generate_overlap_bridges(
 while not bridges:
     print(f"found no bridge for n = {n}, retrying.")
     fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices = generate(
-        fw_model, bw_model, prefix, prefix_eend, suffix, suffix_end
+        fw_model, bw_model, prefix, prefix_end, suffix, suffix_end
     )
     bridges = generate_overlap_bridges(
         fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
