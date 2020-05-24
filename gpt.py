@@ -16,16 +16,16 @@ os.environ["KMP_WARNINGS"] = "off"
 
 
 class Model:
-    def __init__(self, run_name="run1", device="/GPU:0", batch_size=1):
+    def __init__(self, model_name="117M", run_name="run1", device="/GPU:0", batch_size=1):
         self.config = tf.compat.v1.ConfigProto()
         self.config.gpu_options.allow_growth = True
         self.config.graph_options.rewrite_options.layout_optimizer = (
             rewriter_config_pb2.RewriterConfig.OFF
         )
         self.sess = tf.compat.v1.Session(config=self.config)
-        self.enc = encoder.get_encoder(f"{run_name}")
+        self.enc = encoder.get_encoder(model_name, "models")
         self.hparams = model.default_hparams()
-        with open(f"checkpoint/{run_name}/hparams.json") as f:
+        with open(f"models/{model_name}/hparams.json") as f:
             self.hparams.override_from_dict(json.load(f))
         self.batch_size = batch_size
         self.context = tf.compat.v1.placeholder(tf.int32, [self.batch_size, None])
