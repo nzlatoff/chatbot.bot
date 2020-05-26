@@ -1,40 +1,84 @@
+import gc
 import os
 import re
 import time
 import itertools
 import numpy as np
 from gpt import Model
+import tensorflow as tf
 from collections import defaultdict
-
-# model that generates and computes the logits for the forward
-# prediction of the tokens
-fw_model = Model(run_name="forward", batch_size=5)
-# same as forwaerts, but for the backward prediction of the tokens
-# (trained on a dataset where all chars have been reverted)
-bw_model = Model(run_name="backward", batch_size=5)
-
-prefix = "Aha ! À nous les ponts !"
-prefix_end = len(prefix)
-suffix = "Et après ces travaux ils virent que les ponts étaient bons."[::-1]
-suffix_end = len(suffix)
 
 
 # cuts the strand so that we don't end it in the middle of a word
-def cleanup_strand(strand):
-    return re.sub(r"[\t\n\s]+", " ", strand[: strand.rfind(" ")])
+def cleanup_strand(strand, trim="start"):
+    """
+    Remove anything after the last space (trim = "end"), or anything before the
+    first space (trim = "start"), then apply a regex to replace tabs/newlines
+    or multiple spaces with just one.
+    """
+    if trim == "start":
+        return re.sub(r"[\t\n\s]+", " ", strand)[strand.find(" ") :]
+    elif trim == "end":
+        return re.sub(r"[\t\n\s]+", " ", strand)[: strand.rfind(" ")]
 
-def generate(fw_model, bw_model, prefix, prefix_eend, suffix, suffix_end):
 
-    fw_tokens, _, scores, _ = fw_model.run(prefix=prefix, length=500)
-    # the backwards strands are generated backwards
-    bw_strands_rev = bw_model.gen(prefix=suffix, length=500)
+def generate_ngrams(strand, cut_indices, n, verbose=False):
+    """
+    Using the indices of the separator, collect all n-grams for the given
+    strand.
+    """
+    ngrams = []
+    begin_ends = []
+
+    for i in range(len(cut_indices) - n):
+        begin = cut_indices[i] + 1  # (start index after space)
+        end = cut_indices[i + n]  # (end index at space)
+        n_gram = strand[begin:end]
+        ngrams.append(n_gram)
+        begin_ends.append((begin, end))
+
+    if verbose:
+        print_sep()
+        underprint("generating n grams")
+        print(strand)
+        for n_gram, indz in zip(ngrams, begin_ends):
+            print(f" - {indz}: '{n_gram}'")
+
+    return {"ngrams": ngrams, "begin_ends": begin_ends}
+
+
+def generate(
+    fw_model, bw_model, prefix, suffix, length=50, rev_mode="tokens", verbose=False
+):
+
+    prefix_end = len(prefix)
+    suffix_end = len(suffix)
+    fw_tokens, _, scores, _ = fw_model.run(prefix=prefix, length=length)
 
     # cut at the last space
-    fw_strands = [cleanup_strand(fw_strand) for fw_strand in fw_model.decode(fw_tokens)]
-    bw_strands = [cleanup_strand(strand_rev)[::-1] for strand_rev in bw_strands_rev]
+    fw_strands = [
+        cleanup_strand(fw_strand, trim="end")
+        for fw_strand in fw_model.decode(fw_tokens)
+    ]
+
+    if rev_mode == "tokens":
+        # generate the tokens, then reverse them before decoding & clean-up
+        bw_tokens, _, _, _ = bw_model.run(prefix=suffix, length=length, reverse=True)
+        bw_strands = [
+            cleanup_strand(strand_rev, trim="start")
+            for strand_rev in bw_model.decode(bw_tokens[:, ::-1])
+        ]
+    elif rev_mode == "letters":
+        # generate straight in string format and reverse before cleaning
+        bw_strands_rev = bw_model.gen(prefix=suffix, length=length)
+        bw_strands = [
+            cleanup_strand(strand_rev, trim="end")[::-1]
+            for strand_rev in bw_strands_rev
+        ]
 
     # these are the locations where we may want to cut the strands for recombinations
     pattern = r"\s"
+
     all_fw_cut_indices = [
         [
             prefix_end + match.start()
@@ -42,33 +86,41 @@ def generate(fw_model, bw_model, prefix, prefix_eend, suffix, suffix_end):
         ]
         for fw_strand in fw_strands
     ]
+
     all_bw_cut_indices = [
         [match.start() for match in re.finditer(pattern, bw_strand[:-suffix_end])]
         for bw_strand in bw_strands
     ]
+
+    if verbose:
+        print_sep()
+        underprint("fw strands & cuts:")
+        print_strands(fw_strands, all_fw_cut_indices)
+        print_sep()
+        underprint("bw strands & cuts:")
+        print_strands(bw_strands, all_bw_cut_indices)
+        exit()
+
     return fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices
 
 
-# for indices,strand in zip(all_fw_cut_indices, fw_strands):
-#     for i in indices:
-#         print(i)
-#         print(strand)
-#         print(strand[:i], "|", strand[i:])
-#         print()
+# ----------------------------------------------------------------------------------------
+# concat
 
-# print("------")
 
-# for indices,strand in zip(all_bw_cut_indices, bw_strands):
-#     for i in indices:
-#         print(i)
-#         print(strand)
-#         print(strand[:i], "|", strand[i:])
-#         print()
+def generate_concat_bridges(
+    fw_model, bw_model, prefix, suffix, length=50, rev_mode="tokens", write=True,
+):
 
-# returns a (fairly long) list of possible bridges, that we will then evaluate
-# through their forward likelihood
-def generate_possible_bridges(fw_strands, bw_strands):
-    print("inside the possibilities")
+    print_sep()
+    underprint("generating with concatenation")
+
+    fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices = generate(
+        fw_model, bw_model, prefix, suffix, length=length, rev_mode=rev_mode
+    )
+
+    # returns a (fairly long) list of possible bridges, that we will then evaluate
+    # through their forward likelihood
     count = 0
     possible_bridges = []
     for (fw_strand, fw_cut_indices) in zip(fw_strands, all_fw_cut_indices):
@@ -82,199 +134,251 @@ def generate_possible_bridges(fw_strands, bw_strands):
                     )
                     possible_bridges.append((possible_bridge, possible_bridge_cut))
                     count += 1
-    print("-" * 40)
-    print(f"count: {count}")
+    possible_bridges = np.array(list(set(possible_bridges)))
+    print(f"found: {count} possible bridges...")
     print()
-    return np.array(list(set(possible_bridges)))
+
+    mode = "meanmin"
+    perps = fw_model.get_perplexity(
+        possible_bridges[:, 0], verbose=True, mode=mode, batched=True
+    )
+
+    sorted_indz = perps.argsort()
+    sorted_perps = perps[sorted_indz]
+    sorted_bridges = possible_bridges[sorted_indz, 1]
+
+    print_sep()
+    underprint("now the results sorted:")
+    for sentence, perp in zip(sorted_bridges, sorted_perps):
+        stat = f"perp: {perp:21.17f} | {sentence}"
+        print(stat)
+
+    if write:
+        if not os.path.isdir("results"):
+            os.mkdir("results")
+        fname = os.path.join("results", time.strftime(f"%Y-%m-%d-%H:%M:%S-{mode}.txt"))
+        with open(fname, "w") as o:
+            o.write(stat + "\n")
+        print_sep()
+        print(f"written results to {fname}")
 
 
-def generate_final_n_grams(fw_strand, fw_cut_indices, n):
-    n_grams = []
-    begin_ends = []
-
-    fw_cut_indices = fw_cut_indices + [len(fw_strand)]  # adds the end of the fw_strand
-    for i in range(len(fw_cut_indices) - n):
-        n_gram_begin = fw_cut_indices[i] + 1  # (included in the n-gram)
-        n_gram_end = fw_cut_indices[i + n]  # (not included in the n-gram)
-        n_gram = fw_strand[n_gram_begin:n_gram_end]
-        n_grams.append(n_gram)
-        begin_ends.append((n_gram_begin, n_gram_end))
-    return (n_grams, begin_ends)
-
-
-def generate_initial_n_grams(bw_strand, bw_cut_indices, n):
-    n_grams = []
-    begin_ends = []
-    # adds the beginning of the bw_strand (-1 gets added with the +1 in n_gram_begin for i=0
-    bw_cut_indices = [-1] + bw_cut_indices
-    for i in range(len(bw_cut_indices) - n):
-        n_gram_begin = bw_cut_indices[i] + 1  # (included in the n-gram)
-        n_gram_end = bw_cut_indices[i + n]  # (not included in the n-gram)
-        n_gram = bw_strand[n_gram_begin:n_gram_end]
-        n_grams.append(n_gram)
-        begin_ends.append((n_gram_begin, n_gram_end))
-    return (n_grams, begin_ends)
-
-
-# print(generate_final_n_grams("bonjour monsieur le prince machiavelique"), [7, 16, 19, 26], 2))
+# ----------------------------------------------------------------------------------------
+# overlap
 
 
 def generate_overlap_bridges(
-    fw_strands, fw_cut_indices_lists, bw_strands, bw_cut_indices_lists, n
+    fw_model,
+    bw_model,
+    prefix,
+    suffix,
+    length=50,
+    ngrams=2,
+    rev_mode="tokens",
+    verbose=False,
+    write=False,
 ):
-    fw_set = set()
-    bw_set = set()
-    for (fw_strand, fw_cut_indices) in zip(fw_strands, fw_cut_indices_lists):
-        fw_set.update(generate_final_n_grams(fw_strand, fw_cut_indices, n)[0])
-    bw_n_grams_lists = []
-    for (bw_strand, bw_cut_indices) in zip(bw_strands, bw_cut_indices_lists):
-        bw_set.update(generate_initial_n_grams(bw_strand, bw_cut_indices, n)[0])
 
-    fw_bw_intersection = fw_set.intersection(bw_set)
-    print(fw_bw_intersection)
+    print_sep()
+    underprint("generating with overlaps")
+
+    fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices = generate(
+        fw_model, bw_model, prefix, suffix, length=length, rev_mode=rev_mode
+    )
+
+    # underprint("strands:")
+    # print(*fw_strands, sep="\n\n")
+    # print_sep()
+    # print(*bw_strands, sep="\n\n")
+
+    fw_data = defaultdict(dict)
+    bw_data = defaultdict(dict)
+
+    # gather all ngrams in sets
+    all_fw_ngrams, all_bw_ngrams = set(), set()
+
+    for (fw_strand, fw_cut_indices) in zip(fw_strands, all_fw_cut_indices):
+        fw_data[fw_strand] = generate_ngrams(fw_strand, fw_cut_indices, n=ngrams)
+        all_fw_ngrams.update(fw_data[fw_strand]["ngrams"])
+
+    for (bw_strand, bw_cut_indices) in zip(bw_strands, all_bw_cut_indices):
+        bw_data[bw_strand] = generate_ngrams(bw_strand, bw_cut_indices, n=ngrams)
+        all_bw_ngrams.update(bw_data[bw_strand]["ngrams"])
+
+    # are there any matches?
+    fw_bw_intersection = all_fw_ngrams.intersection(all_bw_ngrams)
+
+    while not fw_bw_intersection:
+        print(
+            f"({len(all_fw_ngrams)} fw & {len(all_bw_ngrams)} bw ngrams, {len(fw_data.keys())} total strands, yet no {ngrams}-intersections: generating MOA.)",
+            end="\r"
+        )
+        _fw_strands, _all_fw_cut_indices, _bw_strands, _all_bw_cut_indices = generate(
+            fw_model, bw_model, prefix, suffix, length=length, rev_mode=rev_mode
+        )
+        for (fw_strand, fw_cut_indices) in zip(_fw_strands, _all_fw_cut_indices):
+            fw_data[fw_strand] = generate_ngrams(fw_strand, fw_cut_indices, n=ngrams)
+            all_fw_ngrams.update(fw_data[fw_strand]["ngrams"])
+        for (bw_strand, bw_cut_indices) in zip(_bw_strands, _all_bw_cut_indices):
+            bw_data[bw_strand] = generate_ngrams(bw_strand, bw_cut_indices, n=ngrams)
+            all_bw_ngrams.update(bw_data[bw_strand]["ngrams"])
+        fw_bw_intersection = all_fw_ngrams.intersection(all_bw_ngrams)
+
+    print()
+    print(f"Aha! found {len(fw_bw_intersection)} intersection...")
+    print_sep()
 
     useful_fw_substrands = defaultdict(list)
     useful_bw_substrands = defaultdict(list)
 
-    for (fw_strand, fw_cut_indices) in zip(fw_strands, fw_cut_indices_lists):
-        final_n_grams, begin_ends = generate_final_n_grams(fw_strand, fw_cut_indices, n)
-        for (final_n_gram, begin_end) in zip(final_n_grams, begin_ends):
-            if final_n_gram in fw_bw_intersection:
-                begin, end = begin_end
-                useful_fw_substrand = fw_strand[:begin]
-                useful_fw_substrands[final_n_gram].append(useful_fw_substrand)
+    for strand, strand_data in fw_data.items():
+        for str_n_gram, str_begin_end in zip(
+            strand_data["ngrams"], strand_data["begin_ends"]
+        ):
+            if str_n_gram in fw_bw_intersection:
+                begin, end = str_begin_end
+                useful_fw_substrand = strand[:begin]  # up to the n_gram but omitting it
+                useful_fw_substrands[str_n_gram].append(useful_fw_substrand)
 
-    print("useful fw")
-    print(useful_fw_substrands)
+    for strand, strand_data in bw_data.items():
+        for str_n_gram, str_begin_end in zip(
+            strand_data["ngrams"], strand_data["begin_ends"]
+        ):
+            if str_n_gram in fw_bw_intersection:
+                begin, end = str_begin_end
+                useful_bw_substrand = strand[end:]  # from n_gram onward but omitting it
+                useful_bw_substrands[str_n_gram].append(useful_bw_substrand)
 
-    for (bw_strand, bw_cut_indices) in zip(bw_strands, bw_cut_indices_lists):
-        initial_n_grams, begin_ends = generate_initial_n_grams(
-            bw_strand, bw_cut_indices, n
-        )
-        for (initial_n_gram, begin_end) in zip(initial_n_grams, begin_ends):
-            if initial_n_gram in fw_bw_intersection:
-                begin, end = begin_end
-                useful_bw_substrand = bw_strand[end:]
-                useful_bw_substrands[initial_n_gram].append(useful_bw_substrand)
+    if verbose:
+        print()
+        underprint("intersections:")
+        for inters in fw_bw_intersection:
+            print(f"  '{inters}':")
+            print()
+            underprint("useful fw:", offset="    ")
+            for useful_fw in useful_fw_substrands[inters]:
+                print(f"    - {useful_fw}{inters}")
+            print()
+            underprint("useful bw:", offset="    ")
+            for useful_bw in useful_bw_substrands[inters]:
+                print(f"    - {inters}{useful_bw}")
+            print()
 
-    print("useful bw")
-    print(useful_bw_substrands)
-
-    overlap_bridges = set()
+    bridges = set()
 
     for n_gram in fw_bw_intersection:
         n_gram_useful_fw_substrands = useful_fw_substrands[n_gram]
         n_gram_useful_bw_substrands = useful_bw_substrands[n_gram]
 
+        # cartesian product: [1,2] with [a,b] -> [1,a],[1,b],[2,a],[2,b]
         fw_bw_pairs = itertools.product(
             n_gram_useful_fw_substrands, n_gram_useful_bw_substrands
         )
-        overlap_bridges.update(
+        bridges.update(
             [fw + "\033[0;31m" + n_gram + "\033[0m" + bw for (fw, bw) in fw_bw_pairs]
         )
 
-    return overlap_bridges
-
-
-# fw_strands = ["a b c d e f g x", "x z f g k p q", "c a d f g h"]
-# bw_strands = ['h i j f g x k c d l m n g d', 'h g g i a b j k l m o p', 'a a h i j s d m', 'a d d c d e f']
-
-# print('les strands')
-# print('fw:')
-# print(fw_strands)
-# print()
-# print('bw')
-# print(bw_strands)
-# prefix_end = 3
-# suffix_end = 7
-
-# pattern = r"\s"
-
-# all_fw_cut_indices = [
-#     [prefix_end + match.start() for match in re.finditer(pattern, fw_strand[prefix_end:])]
-#     for fw_strand in fw_strands
-# ]
-# all_bw_cut_indices = [
-#     [match.start() for match in re.finditer(pattern, bw_strand[:-suffix_end])]
-#     for bw_strand in bw_strands
-# ]
-
-fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices = generate(
-    fw_model, bw_model, prefix, prefix_end, suffix, suffix_end
-)
-
-n = 5
-bridges = generate_overlap_bridges(
-    fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
-
-)
-
-while not bridges:
-    print(f"found no bridge for n = {n}, retrying.")
-    fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices = generate(
-        fw_model, bw_model, prefix, prefix_end, suffix, suffix_end
-    )
-    bridges = generate_overlap_bridges(
-        fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
-    )
-    # print(f"found no bridge for n = {n}, retrying with {n-1}")
-    # n = n - 1
-    # bridges = generate_overlap_bridges(
-    #     fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices, n
-    # )
-
-
-if not os.path.isdir("overlaps"):
-    os.mkdir("overlaps")
-fname = os.path.join("overlaps", time.strftime(f"%Y-%m-%d-%H:%M:%S.txt"))
-with open(fname, "w") as o:
+    print()
+    underprint("les bridges:")
     for bridge in bridges:
-        print("----")
         print(bridge)
-        o.write(bridge + "\n")
-        print()
+        print("----")
+    print()
 
-    # select the fw_strand parts that gave something to the intersection
-    # select the bw_strand parts that gave something to the intersection
-
-    # if fw_bw_intersection:
-    #     for fw_bw_elem in list(fw_set_intersection):
-    #         eligible_fw_substrands = []
-    #         for fw_strand in fw_strands:
-    #             fw_final_n_grams = set(generate_final_n_grams(fw_strand))
-
-    #             pass
-    #         eligible_bw_substrands = []
-    #         for bw_strand in bw_strands:
-    #             pass
-    #     return fw_strand, bw_strand
+    if write:
+        if not os.path.isdir("overlaps"):
+            os.mkdir("overlaps")
+        fname = os.path.join("overlaps", time.strftime(f"%Y-%m-%d-%H:%M:%S.txt"))
+        print("printing results to {fname}")
+        with open(fname, "w") as o:
+            for bridge in bridges:
+                o.write(bridge + "\n")
 
 
-# print("forward strands:")
-# print(fw_strands)
-# print("-" * 40)
-# print("backward strands:")
-# print(bw_strands)
-# print("-" * 40)
+# ----------------------------------------------------------------------------------------
+# print
 
-# possible_bridges = generate_possible_bridges(fw_strands, bw_strands)
-# mode = "meanmin"
-# perps = fw_model.get_perplexity(possible_bridges[:, 0], verbose=True, mode=mode)
-# print("-" * 40)
-# print()
 
-# sorted_indz = perps.argsort()
-# sorted_perps = perps[sorted_indz]
-# sorted_bridges = possible_bridges[sorted_indz, 1]
+def print_strands(all_strands, all_indices):
+    for indices, strand in zip(all_indices, all_strands):
+        for i in indices:
+            print(f"index: {i}")
+            print(strand[:i], "|", strand[i:])
+            print()
 
-# if not os.path.isdir("results"):
-#     os.mkdir("results")
-# fname = os.path.join("results", time.strftime(f"%Y-%m-%d-%H:%M:%S-{mode}.txt"))
-# with open(fname, "w") as o:
-#     print("now the results sorted:")
-#     for sentence, perp in zip(sorted_bridges, sorted_perps):
-#         stat = f"perp: {perp:21.17f} | {sentence}"
-#         print(stat)
-#         o.write(stat + "\n")
-# print("-" * 40)
-# print(f"written results to {fname}")
+
+def underprint(s, offset=None):
+    und = "-" * len(s)
+    if offset:
+        s = offset + s
+        und = offset + und
+    print(s)
+    print(und)
+
+
+def print_sep():
+    print("-" * 40)
+
+
+if __name__ == "__main__":
+
+    """
+    two learning modes:
+        - tokens: the model has learnt on reversed token sequences
+        - letters: the model has learnt on reversed strings
+    """
+
+    rev_mode = "tokens"
+    # rev_mode = "letters"
+
+    if len(tf.config.experimental.list_physical_devices("GPU")) > 1:
+        print_sep()
+        print("More than one GPU, attempting dual use.")
+        run_name_fw = "forward"
+        run_name_bw = "backward"
+        device_fw = "GPU:0"
+        device_bw = "GPU:1"
+    else:
+        run_name_fw = "run1"
+        run_name_bw = "117Mr"
+        device_fw = "GPU:0"
+        device_bw = "GPU:0"
+
+    length_desired = 50
+    ngrams_desired = 4
+    batch_size = 3
+
+    # model that generates and computes the logits for the forward
+    # prediction of the tokens
+    fw_model = Model(run_name=run_name_fw, batch_size=batch_size, device=device_fw)
+    # same as forwaerts, but for the backward prediction of the tokens
+    # (trained on a dataset where all chars have been reverted)
+    bw_model = Model(run_name=run_name_bw, batch_size=batch_size, device=device_bw)
+
+    prefix = "Il était une fois une princesse qui"
+
+    if rev_mode == "tokens":
+        suffix = "heureux et eurent beaucoup d'enfants."
+    if rev_mode == "letters":
+        suffix = "heureux et eurent beaucoup d'enfants."[::-1]
+
+    generate_concat_bridges(
+        fw_model,
+        bw_model,
+        prefix,
+        suffix,
+        length=length_desired,
+        rev_mode=rev_mode,
+        write=False,
+    )
+
+    # generate_overlap_bridges(
+    #     fw_model,
+    #     bw_model,
+    #     prefix,
+    #     suffix,
+    #     length=length_desired,
+    #     ngrams=ngrams_desired,
+    #     rev_mode=rev_mode,
+    #     write=False,
+    # )
