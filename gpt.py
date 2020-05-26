@@ -605,6 +605,10 @@ class Model:
                                 print(f"{c:>{n_gr_str}}/{n_groups} | processing a batch of {n_seqs} sequence(s) of length: {seq_len}. (batch {i+1} of {div} done, { seq_len // div } seq(s))", end="\r")
                             gc.collect()
                         break
+                    except KeyboardInterrupt:
+                        print()
+                        print("user aborted, bye.")
+                        exit()
                     except:
                         print(f"oopsie, that batch ({n_seqs//div} seqs) was too big, dividing it into {div * 2} chunks of {n_seqs//(div * 2)} seqs...")
                         div = div * 2
