@@ -243,7 +243,7 @@ def generate_overlap_bridges(
         if not os.path.isdir("overlaps"):
             os.mkdir("overlaps")
         fname = os.path.join("overlaps", time.strftime(f"%Y-%m-%d-%H:%M:%S.txt"))
-        print("writing results to {fname}")
+        print(f"writing results to {fname}")
         with open(fname, "w") as o:
             for bridge in bridges:
                 o.write(bridge + "\n")
