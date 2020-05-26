@@ -18,13 +18,13 @@ def main(args):
     # model that generates and computes the logits for the forward
     # prediction of the tokens
     fw_model = Model(
-        run_name=args.run_name_fw, batch_size=args.batch_size, device=args.device_fw
+        model_name=args.model_name_fw, run_name=args.run_name_fw, batch_size=args.batch_size, device=args.device_fw
     )
 
     # same as forwaerts, but for the backward prediction of the tokens
     # (trained on a dataset where all chars have been reverted)
     bw_model = Model(
-        run_name=args.run_name_bw, batch_size=args.batch_size, device=args.device_bw
+        model_name=args.model_name_bw, run_name=args.run_name_bw, batch_size=args.batch_size, device=args.device_bw
     )
 
     if args.mode == "letters":
