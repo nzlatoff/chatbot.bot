@@ -1,5 +1,5 @@
 conda activate tf14
-CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src python bridges.py \
+CUDA_VISIBLE_DEVICES=1 PYTHONPATH=src python bridges.py \
   --mode letters \
   --overlap \
   --model_name_fw 1558M \
