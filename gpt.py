@@ -16,7 +16,9 @@ os.environ["KMP_WARNINGS"] = "off"
 
 
 class Model:
-    def __init__(self, model_name="117M", run_name="run1", device="/GPU:0", batch_size=1):
+    def __init__(
+        self, model_name="117M", run_name="run1", device="/GPU:0", batch_size=1
+    ):
         self.config = tf.compat.v1.ConfigProto()
         self.config.gpu_options.allow_growth = True
         self.config.graph_options.rewrite_options.layout_optimizer = (
@@ -54,7 +56,14 @@ class Model:
     # - generate text & logits
 
     def gen(
-        self, prefix="\n", length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None
+        self,
+        prefix="\n",
+        length=5,
+        temperature=1,
+        top_k=0,
+        top_p=0.0,
+        batch_size=None,
+        reverse=False,
     ):
         """
         Higher level generation: input a sentence, get an array with n batches
@@ -72,10 +81,20 @@ class Model:
                 self.top_p: top_p,
             },
         )
-        return self.decode(tkns)
+        if reverse:
+            return self.decode(tkns[:, ::-1])
+        else:
+            return self.decode(tkns)
 
     def run(
-        self, prefix="\n", length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None
+        self,
+        prefix="\n",
+        length=5,
+        temperature=1,
+        top_k=0,
+        top_p=0.0,
+        batch_size=None,
+        reverse=False,
     ):
         """
         Lower level generation: input a sentence, get n batches of generated
@@ -90,8 +109,12 @@ class Model:
             perplexities: the perplexity for each sentence
                     shape: (batch_size, 1)
         """
+        if reverse:
+            pref = self.encode(prefix)[::-1]
+        else:
+            pref = self.encode(prefix)
         self.check_batch_size(batch_size)
-        context_tokens = self.batch_size * [self.encode(prefix)]
+        context_tokens = self.batch_size * [pref]
         tokens, logits = self.sess.run(
             self.output,
             feed_dict={
@@ -196,6 +219,7 @@ class Model:
         self.ckpt = tf.train.latest_checkpoint(path)
         self.saver = tf.compat.v1.train.Saver(allow_empty=True)
         self.sess.run(tf.compat.v1.global_variables_initializer())
+        print("-" * 40)
         print(f"Loading checkpoint {self.ckpt}")
         self.saver.restore(self.sess, self.ckpt)
 
@@ -205,7 +229,7 @@ class Model:
             with open(hparams_file) as f:
                 self.hparams.override_from_dict(json.load(f))
 
-    def check_batch_size(self, batch_size):
+    def check_batch_size(self, batch_size, verbose=True):
         """
         Returns self.batch_size if batch_size is None.
         Else runs reset() to redraw the graph with a new batch_size.
@@ -214,9 +238,10 @@ class Model:
             batch_size = self.batch_size
         else:
             if batch_size != self.batch_size:
-                print(
-                    f"(Batch size changed from {self.batch_size} to {batch_size}, resetting graph.)"
-                )
+                if verbose:
+                    print(
+                        f"(Batch size changed from {self.batch_size} to {batch_size}, resetting graph.)"
+                    )
                 self.reset(batch_size=batch_size)
 
     def dummy_run(self):
@@ -457,7 +482,7 @@ class Model:
     # Two following functions adapted from @gpt2ent:
     # https://github.com/gpt2ent/gpt-2-simple/blob/652fdab80131ce83f8f1b6fd00f597dd48ae2e36/gpt_2_simple/gpt_2.py#L504
 
-    def get_logits(self, context_tokens, last_only=False):
+    def get_logits(self, context_tokens, last_only=False, verbose=True):
         """
         Generate the logits (probabilities of each token) at each step for a
         given one or more sequences of tokens. If computing logits for a batch
@@ -469,10 +494,10 @@ class Model:
                     or, if last_only is True: (batch_size, 1, n_vocab)
         """
         if not isinstance(context_tokens[0], (list, tuple, np.ndarray)):
-            self.check_batch_size(1)
+            self.check_batch_size(1, verbose=verbose)
             context = self.batch_size * [context_tokens]
         else:
-            self.check_batch_size(len(context_tokens))
+            self.check_batch_size(len(context_tokens), verbose=verbose)
             context = context_tokens
         logits = self.sess.run(self.model, feed_dict={self.context: context})["logits"]
         # all logits starting from the second token, n logits for n tokens
