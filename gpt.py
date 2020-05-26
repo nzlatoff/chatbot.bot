@@ -464,20 +464,36 @@ class Model:
     # - get_logits: run existing tokens thru the network, returns logits
     # - get_perplexity: gets perplexity for one or more existing sentences
 
-    def _perplexities(self, scores):
+    def _perplexities(self, scores, mode=None):
         """
         Compute the perplexity given a batch of scores (computed by
         self.run()).
         Inputs
         ------
             - scores: shape: (batch_size, seq_len - 1)
+            - mode: 'min': returns the minimum score for each sequence.
+                    'mean': returns - mean(scores).
+                    'meanmin': returns the min score - mean(scores).
+                    Defaults to None: returns - mean of 2**log2(exp(scores)).
         Returns
         -------
             - perplexities: shape: (batch_size, 1)
         """
-        return 2 ** (
-            -np.mean(np.log2(np.exp(np.nan_to_num(scores))), axis=-1, keepdims=True)
-        )
+
+        if mode == "min":
+            perplexities = np.min(scores, axis=-1, keepdims=True)
+        if mode == "mean":
+            perplexities = -np.mean(scores, axis=-1, keepdims=True)
+        if mode == "meanmin":
+            perplexities = np.min(scores, axis=-1, keepdims=True) - np.mean(
+                scores, axis=-1, keepdims=True
+            )
+        else:
+            perplexities = 2 ** (
+                -np.mean(np.log2(np.exp(np.nan_to_num(scores))), axis=-1, keepdims=True)
+            )
+
+        return perplexities
 
     # Two following functions adapted from @gpt2ent:
     # https://github.com/gpt2ent/gpt-2-simple/blob/652fdab80131ce83f8f1b6fd00f597dd48ae2e36/gpt_2_simple/gpt_2.py#L504
