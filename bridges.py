@@ -18,13 +18,19 @@ def main(args):
     # model that generates and computes the logits for the forward
     # prediction of the tokens
     fw_model = Model(
-        model_name=args.model_name_fw, run_name=args.run_name_fw, batch_size=args.batch_size, device=args.device_fw
+        model_name=args.model_name_fw,
+        run_name=args.run_name_fw,
+        batch_size=args.batch_size,
+        device=args.device_fw,
     )
 
     # same as forwaerts, but for the backward prediction of the tokens
     # (trained on a dataset where all chars have been reverted)
     bw_model = Model(
-        model_name=args.model_name_bw, run_name=args.run_name_bw, batch_size=args.batch_size, device=args.device_bw
+        model_name=args.model_name_bw,
+        run_name=args.run_name_bw,
+        batch_size=args.batch_size,
+        device=args.device_bw,
     )
 
     if args.mode == "letters":
@@ -164,7 +170,7 @@ def generate_overlap_bridges(
 
     while not fw_bw_intersection:
         print(
-            f"({len(all_fw_ngrams)} fw & {len(all_bw_ngrams)} bw ngrams, {len(fw_data.keys())} total strands, yet no {ngrams}-intersections: generating MOA.)",
+            f"({len(all_fw_ngrams)} fw & {len(all_bw_ngrams)} bw ngrams, {len(fw_data.keys()) + len(bw_data.keys())} total strands, yet no {ngrams}-intersections: generating MOA.)",
             end="\r",
         )
         _fw_strands, _all_fw_cut_indices, _bw_strands, _all_bw_cut_indices = generate(
