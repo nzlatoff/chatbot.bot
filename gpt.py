@@ -490,9 +490,9 @@ class Model:
 
         if mode == "min":
             perplexities = np.min(scores, axis=-1, keepdims=True)
-        if mode == "mean":
+        elif mode == "mean":
             perplexities = -np.mean(scores, axis=-1, keepdims=True)
-        if mode == "meanmin":
+        elif mode == "meanmin":
             perplexities = np.min(scores, axis=-1, keepdims=True) - np.mean(
                 scores, axis=-1, keepdims=True
             )
