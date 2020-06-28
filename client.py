@@ -75,8 +75,6 @@ def main(args):
     @sio.event
     def connect():
         print("\tconnection established")
-        sio.emit('chat message', {'message': 'blah !!!  from the other server',
-                                  'character': 'jbot', 'user':'le laptop'})
         # sio.emit("new user", "le py server")
 
     @sio.event
