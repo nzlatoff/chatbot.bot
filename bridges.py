@@ -358,6 +358,12 @@ def generate_ngrams(strand, cut_indices, n, verbose=False):
 # print
 
 
+def clear_line():
+    # https://stackoverflow.com/a/943921
+    rows, columns = os.popen("stty size", "r").read().split()
+    print(" " * int(columns), end="\r")
+
+
 def print_strands(all_strands, all_indices):
     for indices, strand in zip(all_indices, all_strands):
         for i in indices:
