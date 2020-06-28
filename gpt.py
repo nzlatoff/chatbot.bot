@@ -158,8 +158,8 @@ class Model:
         Decode an array (or a batch) of machine-readable subwords into an array
         of string(s).
         """
-        if isinstance(s[0], int):
-            return np.array(self.enc.decode(s))
+        if isinstance(s[0], (int, np.integer)):
+            return self.enc.decode(s)
         elif isinstance(s, (list, tuple, np.ndarray)):
             return [self.enc.decode(ss) for ss in s]
 
