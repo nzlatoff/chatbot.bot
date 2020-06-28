@@ -472,6 +472,43 @@ class Model:
     # - get_logits: run existing tokens thru the network, returns logits
     # - get_perplexity: gets perplexity for one or more existing sentences
 
+    def _ranks(self, logits, scores, mode="mean"):
+        """
+        Compute the rank of tokens for a batch of (freshly generated) input seqences(s).
+        Note: this assumes equal lengths for sequences.
+        Inputs
+        ------
+            - logits: all logits of the seq batch. (produced by .run())
+            - scores: scores for the seq batch. (produced by .run())
+            - mode: 'min': returns the minimum rank for each sequence.
+                    'max': returns the maximum rank for each sequence.
+                    'mean': returns mean(ranks).
+                    'meanmin': returns the min score - mean(ranks).
+        Returns
+        -------
+            - ranks: rank of each seq, computed according to 'mode'.
+            - tkns_ranks: ranks of each token for the seq batch.
+
+        """
+        logits_sorted = np.sort(logits)[..., ::-1]  # descending order
+        tkns_ranks = np.where(logits_sorted == scores[..., None])[-1]
+        # np.where flattens the results -> reshape to (batch_size, seq_len)
+        tkns_ranks = tkns_ranks.reshape(logits.shape[0], -1)
+        if mode == "min":
+            ranks = np.min(tkns_ranks, axis=-1, keepdims=True)
+        elif mode == "max":
+            ranks = np.max(tkns_ranks, axis=-1, keepdims=True)
+        elif mode == "mean":
+            ranks = np.mean(tkns_ranks, axis=-1, keepdims=True)
+        elif mode == "meanmin":
+            ranks = np.min(tkns_ranks, axis=-1, keepdims=True) - np.mean(
+                tkns_ranks, axis=-1, keepdims=True
+            )
+        else:
+            raise Exception(f"mode {mode} unknown...")
+
+        return ranks, tkns_ranks
+
     def _perplexities(self, scores, mode=None):
         """
         Compute the perplexity given a batch of scores (computed by
@@ -539,6 +576,84 @@ class Model:
             grouped_tkns[len(seq)]["n"] += 1
             grouped_tkns[len(seq)]["seqs"].append(seq)
         return grouped_tkns
+
+    def get_rank(
+        self,
+        sentences=["\n"],
+        mode="mean",
+        return_all_ranks=False,
+        verbose=False,
+        batched=False,
+    ):
+        """
+        Compute the rank of tokens for input sentence(s). Note: this assumes
+        unequal lengths for sentences. For freshly neuroned batches of equal
+        lengths, use the logits returned by self.run() and pass them to
+        _ranks().
+        Inputs
+        ------
+            - sentences: str or array
+            - mode: 'min': returns the minimum rank for each sequence.
+                    'max': returns the maximum rank for each sequence.
+                    'mean': returns mean(ranks).
+                    'meanmin': returns the min score - mean(ranks).
+            - return_all_ranks: if True returns the arrays of ranks for all
+                                steps. Defaults to False.
+            - verbose: print the progress made. Defaults to false.
+        Returns
+        -------
+            - seq_ranks: array of rank score(s), one per sentence, according to
+                        'mode'. shape: (n_sentences,)
+            - all_tkns_ranks: array of ranks of tokens at each step for each sentence.
+                                shape: (n_sentences, seq_len)
+                                ! seq_len is the number of tokens after encoding
+        """
+        if verbose:
+            msg = "calculating ranks of existing sentences:"
+            print(msg)
+            print("-" * len(msg))
+        if isinstance(sentences, str):
+            sentences = [sentences]
+        tkns = self.encode(sentences)
+        tot = len(tkns)
+        count_len = len(str(tot))  # just for formatting purposes
+        # assuming varying sequence lengths, just use a plain loop
+        # and run each of them through the network
+        seq_ranks = []
+        tkns_ranks = []
+        for i, seq in enumerate(tkns):
+            seq_len = len(seq)
+            logits = self.get_logits(context_tokens=seq)
+            # don't take the last one (predicting the token after our sentence)
+            if seq_len > 1:
+                seq_len = seq_len - 1
+                trunc = seq[1:]
+                logits = logits[:, :-1, :]
+            scores = np.nan_to_num(
+                [(logits[0, i, token]) for i, token in enumerate(trunc)]
+            )
+            logits_sorted = np.sort(logits)[..., ::-1]  # descending order
+            ranks = np.where(logits_sorted == scores[..., None])[-1]
+            tkns_ranks.append(ranks)
+            if mode == "min":
+                rank = min(ranks)
+            elif mode == "max":
+                rank = max(ranks)
+            elif mode == "mean":
+                rank = np.mean(ranks)
+            elif mode == "meanmin":
+                rank = min(ranks) - np.mean(ranks)
+            elif mode == "stdev":
+                rank = np.std(ranks)
+            else:
+                raise Exception(f"mode {mode} unknown...")
+            if verbose:
+                print(f"{i+1:{count_len}}/{tot} | {rank:20.17f} | {sentences[i]}")
+            seq_ranks.append(rank)
+        print()
+        if return_all_ranks:
+            return np.array(seq_ranks), np.array(tkns_ranks)
+        return np.array(seq_ranks)
 
     def get_perplexity(
         self,
