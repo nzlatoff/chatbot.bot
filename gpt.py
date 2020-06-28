@@ -200,6 +200,7 @@ class Model:
     # - change hparams
     # - check & reset graph with new batch size
     # - dummy run to clear out messages
+    # - clear line print helper
 
     def reset(
         self, hparams_file=None, device="/GPU:0", batch_size=1, top_k=0.0, top_p=0.0
@@ -252,6 +253,11 @@ class Model:
         clearing out messages and warnings.
         """
         self.run("A", length=1, batch_size=self.batch_size)
+
+    def clear_line(self):
+        # https://stackoverflow.com/a/943921
+        _, columns = os.popen("stty size", "r").read().split()
+        print(" " * int(columns), end="\r")
 
     # --------------------------------------------------------------------------------
     # Bowels
