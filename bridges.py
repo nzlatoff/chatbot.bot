@@ -43,6 +43,7 @@ def main(args):
             args.prefix,
             args.suffix,
             length=args.length,
+            total_strands=args.total_strands,
             rev_mode=args.mode,
             write=args.write,
         )
@@ -54,6 +55,7 @@ def main(args):
             args.prefix,
             args.suffix,
             length=args.length,
+            total_strands=args.total_strands,
             ngrams=args.ngrams,
             rev_mode=args.mode,
             write=args.write,
@@ -65,7 +67,14 @@ def main(args):
 
 
 def generate_concat_bridges(
-    fw_model, bw_model, prefix, suffix, length=50, rev_mode="tokens", write=True,
+    fw_model,
+    bw_model,
+    prefix,
+    suffix,
+    length=50,
+    total_strands=500,
+    rev_mode="tokens",
+    write=True,
 ):
 
     print_sep()
@@ -74,6 +83,28 @@ def generate_concat_bridges(
     fw_strands, all_fw_cut_indices, bw_strands, all_bw_cut_indices = generate(
         fw_model, bw_model, prefix, suffix, length=length, rev_mode=rev_mode
     )
+
+    n_fw = len(fw_strands)
+    n_bw = len(bw_strands)
+    while n_fw + n_bw < args.total_strands:
+        clear_line()
+        print(f"(so far only {n_fw + n_bw} strands, generating MOA.)", end="\r")
+        _fw_strands, _fw_cut_indices, _bw_strands, _bw_cut_indices = generate(
+            fw_model, bw_model, prefix, suffix, length=length, rev_mode=rev_mode
+        )
+        fw_strands.extend(_fw_strands)
+        bw_strands.extend(_bw_strands)
+        all_fw_cut_indices.extend(_fw_cut_indices)
+        all_bw_cut_indices.extend(_bw_cut_indices)
+        n_fw += len(_fw_strands)
+        n_bw += len(_bw_strands)
+
+    fw_strands = fw_strands[: args.total_strands]
+    bw_strands = bw_strands[: args.total_strands]
+    all_fw_cut_indices = all_fw_cut_indices[: args.total_strands]
+    all_bw_cut_indices = all_bw_cut_indices[: args.total_strands]
+    print()
+    print("done.")
 
     # TODO: test speed with gen all cuts then use Cartesian product instead
     # returns a (fairly long) list of possible bridges, that we will then evaluate
@@ -87,7 +118,11 @@ def generate_concat_bridges(
                     # riddance of space in fw_strand, kept in bw_strand
                     possible_bridge = fw_strand[:fw_index] + bw_strand[bw_index:]
                     possible_bridge_cut = (
-                        fw_strand[:fw_index] + " | " + bw_strand[bw_index:]
+                        fw_strand[:fw_index]
+                        + "\033[0;31m"
+                        + " | "
+                        + "\033[0m"
+                        + bw_strand[bw_index:]
                     )
                     possible_bridges.append((possible_bridge, possible_bridge_cut))
                     count += 1
@@ -96,9 +131,13 @@ def generate_concat_bridges(
     print()
 
     mode = "meanmin"
+    # t = time.time()
+    # sadness! the batched version is 2 or more times slower than the plain one
     perps = fw_model.get_perplexity(
-        possible_bridges[:, 0], verbose=True, mode=mode, batched=True
+        possible_bridges[:, 0], verbose=False, mode=mode, batched=False
     )
+    # print()
+    # print(f"time for perps: {time.time() - t} ")
 
     sorted_indz = perps.argsort()
     sorted_perps = perps[sorted_indz]
@@ -133,6 +172,7 @@ def generate_overlap_bridges(
     prefix,
     suffix,
     length=50,
+    total_strands=500,
     ngrams=2,
     rev_mode="tokens",
     verbose=False,
@@ -319,9 +359,9 @@ def generate(
 
 def cleanup_strand(strand, trim="start"):
     """
-    Remove anything after the last space (trim = "end"), or anything before the
-    first space (trim = "start"), then apply a regex to replace tabs/newlines
-    or multiple spaces with just one.
+    Apply a regex to replace tabs/newlines or multiple spaces with just one,
+    then remove anything after the last space (trim = "end"), or anything
+    before the first space (trim = "start")
     """
     if trim == "start":
         return re.sub(r"[\t\n\s]+", " ", strand)[strand.find(" ") :]
@@ -508,6 +548,14 @@ if __name__ == "__main__":
         type=int,
         default=50,
         help="Length of generated strands. Defaults to 50.",
+    )
+
+    parse_config.add_argument(
+        "--total_strands",
+        "-t",
+        type=int,
+        default=500,
+        help="Total number (fw + bw) of strands desired.",
     )
 
     parse_config.add_argument(
