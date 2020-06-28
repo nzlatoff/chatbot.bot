@@ -679,7 +679,8 @@ class Model:
             - verbose: print the progress made. Defaults to false.
             - batched: boolean. If False, plain loop, constant batch size of 1,
                        else, collecting seqences by tokenized length, processing
-                       them batch by batch.
+                       them batch by batch. (*This is actually slower than the
+                       loop!*)
         Returns
         -------
             - perplexities: array of perplexity score(s).
@@ -706,60 +707,89 @@ class Model:
                 n_seqs = data["n"]
                 print(f" - {n_seqs} sequence(s) of length: {seq_len}.")
             print()
+
+            print("processing batches:")
             c = 0
+            count = 0
             n_gr_str = len(str(n_groups))
-            for seq_len, data in sorted(grouped_tkns.items(), key=lambda d: d[1]["n"], reverse=True):
+            for seq_len, data in sorted(
+                grouped_tkns.items(), key=lambda d: d[1]["n"], reverse=True
+            ):
                 c += 1
                 seqs = np.array(data["seqs"])
                 n_seqs = data["n"]
-
-                # TODO: - better division into chunks
-                #       - use e.g. h5py to store data to disk as it's the RAM not GPU that is the bottleneck
-                logits = []
-                div = int(np.ceil(n_seqs / 10))
-                while True:
-                    seqs_chunks = np.array_split(seqs, div, axis=0)
-                    try:
-                        for i, s_chunk in enumerate(seqs_chunks):
-                            logits.append(self.get_logits(context_tokens=s_chunk, verbose=False))
-                            if verbose:
-                                print(f"{c:>{n_gr_str}}/{n_groups} | processing a batch of {n_seqs} sequence(s) of length: {seq_len}. (batch {i+1} of {div} done, { seq_len // div } seq(s))", end="\r")
-                            gc.collect()
-                        break
-                    except KeyboardInterrupt:
-                        print()
-                        print("user aborted, bye.")
-                        exit()
-                    except:
-                        print(f"oopsie, that batch ({n_seqs//div} seqs) was too big, dividing it into {div * 2} chunks of {n_seqs//(div * 2)} seqs...")
-                        div = div * 2
-                print()
-                logits = np.vstack(logits)
+                seq_pr = len(str(seq_len))  # formatting
 
                 # if the seq is longer than one, don't take the last one
                 # (predicting the token after our sentence)
                 if seq_len > 1:
                     seq_len = seq_len - 1
-                    seqs = seqs[:, 1:]
-                    logits = logits[:, :-1, :]
 
-                indz = (
-                    tuple(((i,) * seq_len for i in range(n_seqs))),
-                    n_seqs * (tuple(range(seq_len)),),
-                    tuple(tuple(tkn) for tkn in seqs),
-                )
-                scores = logits[indz]
+                # TODO: - better division into chunks
+                #       - use e.g. h5py to store data to disk as it's the RAM not GPU that is the bottleneck
+                all_scores = []
+                div = int(np.ceil(n_seqs / 10))
+                while True:
+                    seqs_chunks = np.array_split(seqs, div, axis=0)
+                    try:
+                        for i, s_chunk in enumerate(seqs_chunks):
 
-                all_scores.extend(s for s in scores)
-                perplexities.extend(p for p in self._perplexities(scores, mode=mode).flatten())
+                            tmp_n_seqs = len(s_chunk)
+                            logits = self.get_logits(
+                                context_tokens=s_chunk, verbose=False
+                            )
+                            count += tmp_n_seqs
+                            self.clear_line()
+                            if verbose:
+                                print(
+                                    f"{c:>{n_gr_str}}/{n_groups} | "
+                                    + f"processing a batch of {tmp_n_seqs:3} "
+                                    + f"sequence(s) of length: {seq_len:{seq_pr}}. "
+                                    + f"(batch {i+1:2} of {div:2} done, "
+                                    + f"{tmp_n_seqs:2} seq(s)) | total seqs "
+                                    + f"so far: {count}",
+                                    end="\r",
+                                )
+
+                            # shortening as above for seq_len: remove 1st tkn & last logit
+                            if seq_len > 1:
+                                s_chunk = s_chunk[:, 1:]
+                                logits = logits[:, :-1, :]
+
+                            indz = (
+                                tuple(((i,) * seq_len for i in range(tmp_n_seqs))),
+                                tmp_n_seqs * (tuple(range(seq_len)),),
+                                tuple(tuple(tkn) for tkn in s_chunk),
+                            )
+
+                            scores = logits[indz]  # .copy()
+                            all_scores.extend(s for s in scores)
+                            perplexities.extend(
+                                p
+                                for p in self._perplexities(scores, mode=mode).flatten()
+                            )
+
+                            gc.collect()
+
+                        break
+                    except KeyboardInterrupt:
+                        print()
+                        print("user aborted, bye.")
+                        exit()
+                    except Exception as e:
+                        print(
+                            f"oopsie, that batch ({n_seqs}/{div} ~= {n_seqs//div} seqs) was too big, dividing it into {div * 2} chunks of {n_seqs//(div * 2)} seqs..."
+                        )
+                        print(e)
+                        div = div * 2
+                print()
 
             if return_scores:
                 return np.array(perplexities), np.array(all_scores)
             return np.array(perplexities)
         else:
-            if verbose:
-                tot = len(tkns)
-                count_len = len(str(tot))  # just for formatting purposes
+            tot = len(tkns)
+            count_len = len(str(tot))  # just for formatting purposes
             # assuming varying sequence lengths, just use a plain loop
             # and run each of them through the network
             perplexities = []
@@ -793,6 +823,8 @@ class Model:
                     print(
                         f"{i+1:{count_len}}/{tot} | {perplexity:20.17f} | {sentences[i]}"
                     )
+                else:
+                    print(f"({i+1:{count_len}}/{tot})", end="\r")
                 perplexities.append(perplexity)
             print()
             if return_scores:
