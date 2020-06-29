@@ -12,6 +12,13 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument(
+    "--model",
+    type=str,
+    default="117M",
+    help="Model for forward model. Defaults to '117M'.",
+)
+
+parser.add_argument(
     "--run_name",
     type=str,
     default="run1",
@@ -35,7 +42,7 @@ args = parser.parse_args()
 
 sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
-le_model = Model(run_name=args.run_name)
+le_model = Model(model_name=args.model, run_name=args.run_name)
 print("-"*40)
 print("run name:", args.run_name)
 print("rank rank_threshold", args.rank_threshold)
@@ -75,11 +82,11 @@ def generate(rank_threshold=25):
     l = le_model.gen(prefix=prefix, length=length_desired)[0]
     generated = l[end_pref:]
 
-    # print(l[:end_pref])
-    # print("-"*40)
-    # print("generated:")
-    # print(generated)
-    # print("-"*40)
+    print(l[:end_pref])
+    print("-"*40)
+    print("generated:")
+    print(generated)
+    print("-"*40)
 
     r = regex.search(replique_re, generated)
 
