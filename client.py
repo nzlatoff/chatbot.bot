@@ -103,11 +103,20 @@ def generate(rank_threshold=25):
         repl = r.group(1)
         char = repl[:repl.find("\n")]
         message = repl[repl.find("\n") + 1:]
-        print(char)
-        print(message)
+        print("\t(generated)")
+        print("\t(char:)")
+        print(f"\t{char}")
+        print("\t(message:)")
+        msg = message.replace("\n", "\n\t")
+        print(f"\t{msg}")
         le_rank = le_model.get_rank(repl)[0]
-        print("\trank of repl:", le_rank)
+        print(f"\t(rank: {le_rank})")
+        print("\t" + "-"*40)
         if le_rank < rank_threshold:
+            print()
+            print(char)
+            print(message)
+            print()
             for i in range(len(message)):
                 # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
                 send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": args.server_name})
@@ -125,6 +134,7 @@ def generate(rank_threshold=25):
 @sio.event
 def connect():
     print("\tconnection established")
+    print("\t" + "-"*40)
     sio.emit("new user", args.server_name)
 
 @sio.event
@@ -138,8 +148,8 @@ def on_chat_message(data):
 
     char = data["character"].replace("\n", "\t\n")
     msg = data["message"].replace("\n", "\t\n")
-    if data["character"]: print(char)
-    if data["message"]: print(msg)
+    if data["character"]: print(f"\t{char}")
+    if data["message"]: print(f"\t{msg}")
 
     messages.append(data)
     character = data["character"]
@@ -154,7 +164,9 @@ def on_chat_message(data):
     # print("-"*40)
 
     rand = random.random()
+    print("\t" + "-"*40)
     print("\trandom has spoken:", rand)
+    print("\t" + "-"*40)
     if rand > 0:
         # print("random has been bountiful, let's generate")
         generate(rank_threshold=args.rank_threshold)
