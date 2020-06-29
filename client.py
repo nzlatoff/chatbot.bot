@@ -130,12 +130,19 @@ def generate(rank_threshold=25):
             for i in range(len(message)):
                 # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
                 send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": args.server_name})
-                time.sleep(.07)
+                time.sleep(.03)
             # send_typing({ "id": sio.sid, "character": "", "message": "", # "user": args.server_name})
             send_message({ "character": char, "message": message, "user": args.server_name})
             prefix = f"{prefix}{start}{char}\n{message}"
         else:
-            print("\tnot answering")
+            print("\t(generated)")
+            print("\t(char:)")
+            print(f"\t{char}")
+            print("\t(message:)")
+            msg = message.replace("\n", "\n\t")
+            print(f"\t{msg}")
+            print(f"\t(rank: {le_rank})")
+            print("\t(NOT ANSWERING)")
             print()
     else:
         print("\tnot answering")
