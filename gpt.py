@@ -27,7 +27,7 @@ class Model:
             rewriter_config_pb2.RewriterConfig.OFF
         )
         self.sess = tf.compat.v1.Session(config=self.config)
-        self.enc = encoder.get_encoder(model_name, "models")
+        self.enc = encoder.get_encoder(model_name, "checkpoint")
         self.hparams = model.default_hparams()
         with open(f"models/{model_name}/hparams.json") as f:
             self.hparams.override_from_dict(json.load(f))
