@@ -125,7 +125,7 @@ def generate(rank_threshold=25):
 @sio.event
 def connect():
     print("\tconnection established")
-    sio.emit("new user", name)
+    sio.emit("new user", args.server_name)
 
 @sio.event
 def disconnect():
