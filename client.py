@@ -130,7 +130,7 @@ def generate(rank_threshold=25):
             for i in range(len(message)):
                 # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
                 send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": args.server_name})
-                time.sleep(.1)
+                time.sleep(.07)
             # send_typing({ "id": sio.sid, "character": "", "message": "", # "user": args.server_name})
             send_message({ "character": char, "message": message, "user": args.server_name})
             prefix = f"{prefix}{start}{char}\n{message}"
@@ -212,5 +212,8 @@ else:
         sio.connect(url)
     else:
         user_pass = b64encode(b"username:password").decode("ascii")
-        sio.connect("https://spark.theatrophone.fr",  { "Authorization" : "Basic %s" % user_pass})
+        url = "https://spark.theatrophone.fr"
+        print(f"connecting to: {url}")
+        print("-"*40)
+        sio.connect(url,  { "Authorization" : "Basic %s" % user_pass})
 sio.wait()
