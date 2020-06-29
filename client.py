@@ -40,6 +40,12 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--heroku",
+    action="store_true",
+    help="Run with heroku. Default: https://spark.theatrophone.fr/.",
+)
+
+parser.add_argument(
     "--rank_threshold",
     type=int,
     default=25,
@@ -189,10 +195,12 @@ if args.local:
     print("-"*40)
     sio.connect(url)
 else:
-    url = "https://shrouded-stream-73690.herokuapp.com/"
-    print(f"connecting to: {url}")
-    print("-"*40)
-    sio.connect(url)
-    # user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")
-    # sio.connect("https://spark.theatrophone.fr",  { "Authorization" : "Basic %s" % user_pass})
+    if args.heroku:
+        url = "https://shrouded-stream-73690.herokuapp.com/"
+        print(f"connecting to: {url}")
+        print("-"*40)
+        sio.connect(url)
+    else:
+        user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")
+        sio.connect("https://spark.theatrophone.fr",  { "Authorization" : "Basic %s" % user_pass})
 sio.wait()
