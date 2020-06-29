@@ -66,7 +66,7 @@ print("-"*40)
 is_generating = False
 length_desired = 250
 
-replique_re = regex.compile("<\|s\|>\n(.*?)\n<\|e\|>\n", regex.DOTALL)
+replique_re = regex.compile("<\|s\|>\n(.*?)\n<\|e\|>", regex.DOTALL)
 separators = "\n<|e|>\n<|s|>\n"
 end = "\n<|e|>\n"
 start = "<|s|>\n"
