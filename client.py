@@ -104,7 +104,7 @@ def generate(rank_threshold=25):
                 # print({ "id": sio.sid, "character": char, "message": message[:i], "user": "Le Serveur" })
                 send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": "Le Serveur"})
                 time.sleep(.1)
-            send_typing({ "id": sio.sid, "character": "", "message": "", "user": "Le Serveur"})
+            # send_typing({ "id": sio.sid, "character": "", "message": "", "user": "Le Serveur"})
             send_message({ "character": char, "message": message, "sender": "Monsieur Py"})
             prefix = f"{prefix}{start}{char}\n{message}"
         else:
