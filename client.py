@@ -61,7 +61,7 @@ le_model = Model(model_name=args.model, run_name=args.run_name)
 print("-"*40)
 print("server name:", args.server_name)
 print("run name:", args.run_name)
-print("rank rank_threshold", args.rank_threshold)
+print("rank threshold:", args.rank_threshold)
 print("-"*40)
 
 is_generating = False
@@ -99,7 +99,10 @@ def generate(rank_threshold=25):
     # add end of answer, store length of prefix
     end_pref = len(prefix)
 
-    l = le_model.gen(prefix=prefix, length=length_desired)[0]
+    l = le_model.gen(prefix=prefix,
+                     temperature=0.8,
+                     top_p=.98,
+                     length=length_desired)[0]
     generated = l[end_pref:]
 
     # print(l[:end_pref])
