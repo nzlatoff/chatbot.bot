@@ -155,10 +155,10 @@ if args.local:
     print("-"*40)
     sio.connect(url)
 else:
-    # url = "https://shrouded-stream-73690.herokuapp.com/"
-    # print(f"connecting to: {url}")
-    # print("-"*40)
-    # sio.connect(url)
-    user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")
-    sio.connect("https://spark.theatrophone.fr",  { "Authorization" : "Basic %s" % user_pass})
+    url = "https://shrouded-stream-73690.herokuapp.com/"
+    print(f"connecting to: {url}")
+    print("-"*40)
+    sio.connect(url)
+    # user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")
+    # sio.connect("https://spark.theatrophone.fr",  { "Authorization" : "Basic %s" % user_pass})
 sio.wait()
