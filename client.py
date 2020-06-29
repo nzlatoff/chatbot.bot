@@ -27,6 +27,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--server_name",
+    type=str,
+    default="Le Serveur",
+    help="Server name used in message.",
+)
+
+parser.add_argument(
     "--local",
     action="store_true",
     help="Run with local server, port 5000.",
@@ -45,6 +52,7 @@ sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
 le_model = Model(model_name=args.model, run_name=args.run_name)
 print("-"*40)
+print("server name:", args.server_name)
 print("run name:", args.run_name)
 print("rank rank_threshold", args.rank_threshold)
 print("-"*40)
@@ -101,11 +109,11 @@ def generate(rank_threshold=25):
         print("\trank of repl:", le_rank)
         if le_rank < rank_threshold:
             for i in range(len(message)):
-                # print({ "id": sio.sid, "character": char, "message": message[:i], "user": "Le Serveur" })
-                send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": "Le Serveur"})
+                # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": name})
+                send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": name})
                 time.sleep(.1)
-            # send_typing({ "id": sio.sid, "character": "", "message": "", "user": "Le Serveur"})
-            send_message({ "character": char, "message": message, "sender": "Monsieur Py"})
+            # send_typing({ "id": sio.sid, "character": "", "message": "", # "user": name})
+            send_message({ "character": char, "message": message, "user": name})
             prefix = f"{prefix}{start}{char}\n{message}"
         else:
             print("\tnot answering")
@@ -117,7 +125,7 @@ def generate(rank_threshold=25):
 @sio.event
 def connect():
     print("\tconnection established")
-    sio.emit("new user", "Le Serveur")
+    sio.emit("new user", name)
 
 @sio.event
 def disconnect():
