@@ -155,10 +155,10 @@ if args.local:
     print("-"*40)
     sio.connect(url)
 else:
-    # url = "***HEROKU WEB ADDRESS***"
-    # print(f"connecting to: {url}")
-    # print("-"*40)
-    # sio.connect(url)
-    user_pass = b64encode(b"username:password").decode("ascii")
-    sio.connect("https://spark.theatrophone.fr",  { "Authorization" : "Basic %s" % user_pass})
+    url = "***HEROKU WEB ADDRESS***"
+    print(f"connecting to: {url}")
+    print("-"*40)
+    sio.connect(url)
+    # user_pass = b64encode(b"username:password").decode("ascii")
+    # sio.connect("https://spark.theatrophone.fr",  { "Authorization" : "Basic %s" % user_pass})
 sio.wait()
