@@ -63,6 +63,7 @@ print("run name:", args.run_name)
 print("rank rank_threshold", args.rank_threshold)
 print("-"*40)
 
+is_generating = False
 length_desired = 250
 
 replique_re = regex.compile("<\|s\|>\n(.*?)\n<\|e\|>\n", regex.DOTALL)
@@ -75,10 +76,13 @@ prefix = ""
 
 def generate(rank_threshold=25):
 
+    global is_generating
     global marker_re
     global pref_re
     global prefix
     global start
+
+    is_generating = True
 
     # print("-"*40)
     # print("prefix:")
@@ -137,6 +141,8 @@ def generate(rank_threshold=25):
         print("\tnot answering")
         print()
 
+    is_generating = False
+
 @sio.event
 def connect():
     print("\tconnection established")
@@ -150,6 +156,7 @@ def disconnect():
 @sio.on("received")
 def on_chat_message(data):
 
+    global is_generating
     global prefix
 
     char = data["character"].replace("\n", "\t\n")
@@ -171,11 +178,14 @@ def on_chat_message(data):
 
     rand = random.random()
     print("\t" + "-"*40)
-    print("\trandom has spoken:", rand)
+    print(f"\trandom has spoken: {rand}")
     print("\t" + "-"*40)
-    if rand > 0:
-        # print("random has been bountiful, let's generate")
-        generate(rank_threshold=args.rank_threshold)
+    if not is_generating:
+        if rand > 0:
+            print("\t(random has been bountiful, let's generate)")
+            generate(rank_threshold=args.rank_threshold)
+    else:
+        print("\t(is generating, not answering...)")
 
 
 def send_typing(data):
