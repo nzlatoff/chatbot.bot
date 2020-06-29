@@ -128,8 +128,10 @@ def on_chat_message(data):
 
     global prefix
 
-    if data["character"]: print(data["character"])
-    if data["message"]: print(data["message"])
+    char = data["character"].replace("\n", "\t\n")
+    msg = data["message"].replace("\n", "\t\n")
+    if data["character"]: print(char)
+    if data["message"]: print(msg)
 
     messages.append(data)
     character = data["character"]
