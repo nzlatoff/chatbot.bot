@@ -2,6 +2,7 @@ from base64 import b64encode
 from gpt import Model
 import socketio
 import argparse
+import textwrap
 import random
 import regex
 import time
@@ -114,10 +115,8 @@ def generate(rank_threshold=25):
         char = repl[:repl.find("\n")]
         message = repl[repl.find("\n") + 1:]
         print("\t(generated)")
-        print("\t(char:)")
         print(f"\t{char}")
-        print("\t(message:)")
-        msg = message.replace("\n", "\n\t")
+        msg = "\n\t".join(textwrap.wrap(message, width=40))
         print(f"\t{msg}")
         le_rank = le_model.get_rank(repl)[0]
         print(f"\t(rank: {le_rank})")
@@ -125,7 +124,8 @@ def generate(rank_threshold=25):
         if le_rank < rank_threshold:
             print()
             print(char)
-            print(message)
+            msg = "\n".join(textwrap.wrap(message, width=40))
+            print(msg)
             print()
             for i in range(len(message)):
                 # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
@@ -136,16 +136,18 @@ def generate(rank_threshold=25):
             prefix = f"{prefix}{start}{char}\n{message}"
         else:
             print("\t(generated)")
-            print("\t(char:)")
             print(f"\t{char}")
-            print("\t(message:)")
             msg = message.replace("\n", "\n\t")
             print(f"\t{msg}")
             print(f"\t(rank: {le_rank})")
-            print("\t(NOT ANSWERING)")
+            print("\t(RANK INSUFFICIENT: NOT ANSWERING)")
             print()
     else:
-        print("\tnot answering")
+        msg = "\n\t\t".join(textwrap.wrap(l, width=40))
+        print("\t\t" + "-"*40)
+        print("\t\t(generated:)")
+        print("\t\t" + msg)
+        print("\t\t(MARKERS NOT FOUND: NOT ANSWERING)")
         print()
 
     is_generating = False
@@ -189,7 +191,7 @@ def on_chat_message(data):
     print("\t" + "-"*40)
     if not is_generating:
         if rand > 0:
-            print("\t(random has been bountiful, let's generate)")
+            print("\t(random is bountiful, let's generate)")
             generate(rank_threshold=args.rank_threshold)
     else:
         print("\t(is generating, not answering...)")
