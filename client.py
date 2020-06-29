@@ -109,11 +109,11 @@ def generate(rank_threshold=25):
         print("\trank of repl:", le_rank)
         if le_rank < rank_threshold:
             for i in range(len(message)):
-                # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": name})
-                send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": name})
+                # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
+                send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": args.server_name})
                 time.sleep(.1)
-            # send_typing({ "id": sio.sid, "character": "", "message": "", # "user": name})
-            send_message({ "character": char, "message": message, "user": name})
+            # send_typing({ "id": sio.sid, "character": "", "message": "", # "user": args.server_name})
+            send_message({ "character": char, "message": message, "user": args.server_name})
             prefix = f"{prefix}{start}{char}\n{message}"
         else:
             print("\tnot answering")
