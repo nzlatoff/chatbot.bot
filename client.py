@@ -82,11 +82,11 @@ def generate(rank_threshold=25):
     l = le_model.gen(prefix=prefix, length=length_desired)[0]
     generated = l[end_pref:]
 
-    print(l[:end_pref])
-    print("-"*40)
-    print("generated:")
-    print(generated)
-    print("-"*40)
+    # print(l[:end_pref])
+    # print("-"*40)
+    # print("generated:")
+    # print(generated)
+    # print("-"*40)
 
     r = regex.search(replique_re, generated)
 
