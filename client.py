@@ -4,6 +4,7 @@ import socketio
 import argparse
 import random
 import regex
+import time
 
 parser = argparse.ArgumentParser(
     description="""
@@ -99,17 +100,24 @@ def generate(rank_threshold=25):
         le_rank = le_model.get_rank(repl)[0]
         print("\trank of repl:", le_rank)
         if le_rank < rank_threshold:
+            for i in range(len(message)):
+                # print({ "id": sio.sid, "character": char, "message": message[:i], "user": "Le Serveur" })
+                send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": "Le Serveur"})
+                time.sleep(.1)
+            send_typing({ "id": sio.sid, "character": "", "message": "", "user": "Le Serveur"})
             send_message({ "character": char, "message": message, "sender": "Monsieur Py"})
             prefix = f"{prefix}{start}{char}\n{message}"
         else:
             print("\tnot answering")
+            print()
     else:
         print("\tnot answering")
+        print()
 
 @sio.event
 def connect():
     print("\tconnection established")
-    # sio.emit("new user", "le py server")
+    sio.emit("new user", "Le Serveur")
 
 @sio.event
 def disconnect():
@@ -136,10 +144,14 @@ def on_chat_message(data):
     # print("-"*40)
 
     rand = random.random()
-    print("random has spoken:", rand)
+    print("\trandom has spoken:", rand)
     if rand > 0:
         # print("random has been bountiful, let's generate")
         generate(rank_threshold=args.rank_threshold)
+
+
+def send_typing(data):
+    sio.emit("typing", data)
 
 def send_message(data):
     # print("-"*40)
