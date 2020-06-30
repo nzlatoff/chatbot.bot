@@ -37,7 +37,7 @@ parser.add_argument(
 parser.add_argument(
     "--local",
     action="store_true",
-    help="Run with local server, port 5000.",
+    help="Run with local server, port 5100.",
 )
 
 parser.add_argument(
@@ -67,7 +67,7 @@ print("-"*40)
 is_generating = False
 length_desired = 250
 
-replique_re = regex.compile("<\|s\|>\n(.*?)\n<\|e\|>", regex.DOTALL)
+replique_re = regex.compile("<\|s\|>\n(.*?)\n+<\|e\|>", regex.DOTALL)
 separators = "\n<|e|>\n<|s|>\n"
 end = "\n<|e|>\n"
 start = "<|s|>\n"
@@ -105,32 +105,48 @@ def generate(rank_threshold=25):
                      length=length_desired)[0]
     generated = l[end_pref:]
 
-    # print(l[:end_pref])
-    # print("-"*40)
-    # print("generated:")
-    # print(generated)
-    # print("-"*40)
+    print("\t\t\t" + "-"*40)
+    print("\t\t\t(raw)")
+    print()
+    msg = "\n\t\t\t".join(textwrap.wrap(generated, width=40))
+    print(f"\t\t\t{msg}")
+    print()
 
     r = regex.search(replique_re, generated)
 
     if r:
         repl = r.group(1)
-        char = repl[:repl.find("\n")]
-        message = repl[repl.find("\n") + 1:]
-        print("\t(generated)")
+        if repl.find("\n") == -1:
+            char = ""
+            message = regex.sub("<\|[es]\|>", "", repl)
+        else:
+            char = regex.sub("<\|[es]\|>", "", repl[:repl.find("\n")])
+            message = regex.sub("<\|[es]\|>", "", repl[repl.find("\n") + 1:])
+
+        print("\t\t" + "-"*40)
+        print("\t\t(generated)")
+        print()
+        rmsg = "\n\t\t".join(textwrap.wrap(repl, width=40))
+        print(f"\t\t{rmsg}")
+        print()
+
+        print("\t" + "-"*40)
+        print("\t(char)")
         print(f"\t{char}")
         msg = "\n\t".join(textwrap.wrap(message, width=40))
+        print("\t(message)")
         print(f"\t{msg}")
         le_rank = le_model.get_rank(repl)[0]
         print(f"\t(rank: {le_rank})")
-        print("\t" + "-"*40)
+        print()
+
         if le_rank < rank_threshold:
-            print()
+            print("-"*40)
             print(char)
             msg = "\n".join(textwrap.wrap(message, width=40))
             print(msg)
             print()
-            for i in range(len(message)):
+            for i in range(len(message) + 1):
                 # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
                 send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": args.server_name})
                 time.sleep(.03)
@@ -157,8 +173,8 @@ def generate(rank_threshold=25):
 
 @sio.event
 def connect():
-    print("\tconnection established")
-    print("\t" + "-"*40)
+    print("connection established")
+    print("-"*40)
     sio.emit("new user", args.server_name)
 
 @sio.event
@@ -173,6 +189,8 @@ def on_chat_message(data):
 
     char = data["character"].replace("\n", "\t\n")
     msg = data["message"].replace("\n", "\t\n")
+    print("\t(received)")
+    print()
     if data["character"]: print(f"\t{char}")
     if data["message"]: print(f"\t{msg}")
 
@@ -191,10 +209,10 @@ def on_chat_message(data):
     rand = random.random()
     print("\t" + "-"*40)
     print(f"\trandom has spoken: {rand}")
-    print("\t" + "-"*40)
     if not is_generating:
         if rand > 0:
             print("\t(random is bountiful, let's generate)")
+            print()
             generate(rank_threshold=args.rank_threshold)
     else:
         print("\t(is generating, not answering...)")
@@ -212,9 +230,8 @@ def send_message(data):
 
 user_pass = b64encode(b"username:password").decode("ascii")
 if args.local:
-    url = "http://localhost:5000"
+    url = "http://localhost:5100"
     print(f"connecting to: {url}")
-    print("-"*40)
     sio.connect(url)
 else:
     if args.heroku:
