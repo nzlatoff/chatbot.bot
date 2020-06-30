@@ -105,6 +105,7 @@ def generate(rank_threshold=25):
                      length=length_desired)[0]
     generated = l[end_pref:]
 
+    print()
     print("\t\t\t" + "-"*40)
     print("\t\t\t(raw)")
     print()
@@ -132,9 +133,12 @@ def generate(rank_threshold=25):
 
         print("\t" + "-"*40)
         print("\t(char)")
+        print()
         print(f"\t{char}")
+        print()
         msg = "\n\t".join(textwrap.wrap(message, width=40))
         print("\t(message)")
+        print()
         print(f"\t{msg}")
         le_rank = le_model.get_rank(repl)[0]
         print(f"\t(rank: {le_rank})")
@@ -154,11 +158,7 @@ def generate(rank_threshold=25):
             send_message({ "character": char, "message": message, "user": args.server_name})
             prefix = f"{prefix}{start}{char}\n{message}"
         else:
-            print("\t(generated)")
-            print(f"\t{char}")
-            msg = message.replace("\n", "\n\t")
-            print(f"\t{msg}")
-            print(f"\t(rank: {le_rank})")
+            print()
             print("\t(RANK INSUFFICIENT: NOT ANSWERING)")
             print()
     else:
@@ -174,7 +174,7 @@ def generate(rank_threshold=25):
 @sio.event
 def connect():
     print("connection established")
-    print("-"*40)
+    print()
     sio.emit("new user", args.server_name)
 
 @sio.event
@@ -193,6 +193,8 @@ def on_chat_message(data):
 
     char = data["character"].replace("\n", "\t\n")
     msg = data["message"].replace("\n", "\t\n")
+
+    print("\t" + "-"*40)
     print("\t(received)")
     print()
     if data["character"]: print(f"\t{char}")
@@ -220,6 +222,7 @@ def on_chat_message(data):
             generate(rank_threshold=args.rank_threshold)
     else:
         print("\t(is generating, not answering...)")
+        print()
 
 
 def send_typing(data):
@@ -241,12 +244,10 @@ else:
     if args.heroku:
         url = "https://shrouded-stream-73690.herokuapp.com/"
         print(f"connecting to: {url}")
-        print("-"*40)
         sio.connect(url)
     else:
         user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")
         url = "https://spark.theatrophone.fr"
         print(f"connecting to: {url}")
-        print("-"*40)
         sio.connect(url,  { "Authorization" : "Basic %s" % user_pass})
 sio.wait()
