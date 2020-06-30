@@ -178,6 +178,10 @@ def connect():
     sio.emit("new user", args.server_name)
 
 @sio.event
+def connect_error():
+    print("The connection failed!")
+
+@sio.event
 def disconnect():
     print("\tconnection lost")
 
