@@ -201,6 +201,17 @@ def connect_error():
 def disconnect():
     print("\tconnection lost")
 
+@sio.on("erase messages"):
+def reset_session():
+    print()
+    print("="*40)
+    print()
+    print("resetting session")
+    print()
+    print("="*40)
+    messages = []
+    prefix = ""
+
 @sio.on("received")
 def on_chat_message(data):
 
