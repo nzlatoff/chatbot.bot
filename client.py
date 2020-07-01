@@ -201,7 +201,7 @@ def connect_error():
 def disconnect():
     print("\tconnection lost")
 
-@sio.on("erase messages"):
+@sio.on("erase messages")
 def reset_session():
     print()
     print("="*40)
