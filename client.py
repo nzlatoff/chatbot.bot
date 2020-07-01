@@ -103,6 +103,7 @@ def generate(rank_threshold=25):
                      temperature=0.8,
                      top_p=.98,
                      length=length_desired)[0]
+    l = regex.sub(r"<|endoftext|>", "", l) # no openai marker
     generated = l[end_pref:]
 
     print()
