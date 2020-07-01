@@ -35,6 +35,20 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--temperature",
+    type=float,
+    default=0.9,
+    help="Temperature when sampling.",
+)
+
+parser.add_argument(
+    "--top_p",
+    type=float,
+    default=0.998,
+    help="Nucleus sampling when sampling.",
+)
+
+parser.add_argument(
     "--local",
     action="store_true",
     help="Run with local server, port 5100.",
@@ -59,10 +73,11 @@ sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
 le_model = Model(model_name=args.model, run_name=args.run_name)
 print("-"*40)
-print("server name:", args.server_name)
-print("run name:", args.run_name)
-print("rank threshold:", args.rank_threshold)
-print("-"*40)
+print("(settings:)")
+print()
+for k, v in vars(args).items():
+    print(f"- {k}: {v}")
+print()
 
 is_generating = False
 length_desired = 250
@@ -100,10 +115,10 @@ def generate(rank_threshold=25):
     end_pref = len(prefix)
 
     l = le_model.gen(prefix=prefix,
-                     temperature=0.8,
-                     top_p=.98,
+                     temperature=args.temperature,
+                     top_p=args.top_p,
                      length=length_desired)[0]
-    l = regex.sub(r"<|endoftext|>", "", l) # no openai marker
+    l = regex.sub(r"<\|endoftext\|>", "", l) # no openai marker
     generated = l[end_pref:]
 
     print()
@@ -239,16 +254,19 @@ def send_message(data):
 user_pass = b64encode(b"username:password").decode("ascii")
 if args.local:
     url = "http://localhost:5100"
+    print("-"*40)
     print(f"connecting to: {url}")
     sio.connect(url)
 else:
     if args.heroku:
         url = "***HEROKU WEB ADDRESS***"
+        print("-"*40)
         print(f"connecting to: {url}")
         sio.connect(url)
     else:
         user_pass = b64encode(b"username:password").decode("ascii")
         url = "https://spark.theatrophone.fr"
+        print("-"*40)
         print(f"connecting to: {url}")
         sio.connect(url,  { "Authorization" : "Basic %s" % user_pass})
 sio.wait()
