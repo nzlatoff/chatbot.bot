@@ -94,6 +94,7 @@ separators = "\n<|e|>\n<|s|>\n"
 end = "\n<|e|>\n"
 start = "<|s|>\n"
 
+resetting_session = False
 messages = []
 prefix = ""
 
@@ -106,6 +107,8 @@ def generate(rank_threshold=25):
     global start
 
     is_generating = True
+
+    if should_sess_be_reset(): return
 
     # print("-"*40)
     # print("prefix:")
@@ -173,11 +176,18 @@ def generate(rank_threshold=25):
             msg = "\n".join(textwrap.wrap(message, width=40))
             print(msg)
             print()
-            for i in range(len(message) + 1):
-                # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
-                send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": args.server_name})
-                time.sleep(args.network_print_speed)
-            # send_typing({ "id": sio.sid, "character": "", "message": "", # "user": args.server_name})
+
+            if args.network_print_speed > 0:
+                for i in range(len(message) + 1):
+
+                    if should_sess_be_reset(): return
+
+                    # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
+                    send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": args.server_name})
+                    time.sleep(args.network_print_speed)
+
+            if should_sess_be_reset(): return
+
             send_message({ "character": char, "message": message, "user": args.server_name})
             prefix = f"{prefix}{start}{char}\n{message}"
         else:
@@ -193,6 +203,18 @@ def generate(rank_threshold=25):
         print()
 
     is_generating = False
+    if should_sess_be_reset(): return
+
+def should_sess_be_reset():
+    global resetting_session
+    global is_generating
+    if resetting_session:
+        print(f"generation interrupted")
+        print()
+        print("="*40)
+        is_generating = False
+        resetting_session = False
+        return True
 
 @sio.event
 def connect():
@@ -213,6 +235,11 @@ def disconnect():
 
 @sio.on("erase messages")
 def reset_session():
+
+    global resetting_session
+    global messages
+    global prefix
+
     print()
     print("="*40)
     print()
@@ -221,6 +248,11 @@ def reset_session():
     print("="*40)
     messages = []
     prefix = ""
+    if is_generating:
+        resetting_session = True
+    else:
+        print()
+        print("="*40)
 
 @sio.on("received")
 def on_chat_message(data):
