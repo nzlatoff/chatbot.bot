@@ -197,16 +197,19 @@ def generate(rank_threshold=25):
 @sio.event
 def connect():
     print("connection established")
+    print("-"*40)
     print()
     sio.emit("new user", args.server_name)
 
 @sio.event
-def connect_error():
+def connect_error(e):
     print("The connection failed!")
+    print(e)
 
 @sio.event
 def disconnect():
-    print("\tconnection lost")
+    print("connection lost")
+    print("-"*40)
 
 @sio.on("erase messages")
 def reset_session():
