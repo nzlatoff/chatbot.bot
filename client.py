@@ -49,6 +49,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--network_print_speed",
+    type=float,
+    default=0.1,
+    help="Length of pause for each step of interactive print loop, in ms.",
+)
+
+parser.add_argument(
     "--local",
     action="store_true",
     help="Run with local server, port 5100.",
@@ -169,7 +176,7 @@ def generate(rank_threshold=25):
             for i in range(len(message) + 1):
                 # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
                 send_typing({ "id": sio.sid, "character": char, "message": message[:i], "user": args.server_name})
-                time.sleep(.03)
+                time.sleep(args.network_print_speed)
             # send_typing({ "id": sio.sid, "character": "", "message": "", # "user": args.server_name})
             send_message({ "character": char, "message": message, "user": args.server_name})
             prefix = f"{prefix}{start}{char}\n{message}"
