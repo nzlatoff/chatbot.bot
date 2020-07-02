@@ -166,7 +166,18 @@ def generate(rank_threshold=25):
         print("\t(message)")
         print()
         print(f"\t{msg}")
-        le_rank = le_model.get_rank(repl)[0]
+        print()
+        # le_rank = le_model.get_rank(repl)[0]
+
+        print("\t(prefix & repl)")
+        print()
+        prefix_repl = f"{prefix} \u001b[31m|\u001b[0m {r.group(0)}"
+        msg = "\n\t".join(textwrap.wrap(prefix_repl, width=40))
+        print(f"\t{msg}")
+
+        prefix_rank = le_model.get_rank(prefix)[0]
+        le_rank = le_model.get_rank(prefix_repl)[0]
+        print(f"\t(prefix rank: {prefix_rank})")
         print(f"\t(rank: {le_rank})")
         print()
 
@@ -199,6 +210,7 @@ def generate(rank_threshold=25):
         print("\t\t" + "-"*40)
         print("\t\t(generated:)")
         print("\t\t" + msg)
+        print()
         print("\t\t(MARKERS NOT FOUND: NOT ANSWERING)")
         print()
 
@@ -244,8 +256,6 @@ def reset_session():
     print("="*40)
     print()
     print("resetting session")
-    print()
-    print("="*40)
     messages = []
     prefix = ""
     if is_generating:
