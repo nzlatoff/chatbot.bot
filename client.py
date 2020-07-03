@@ -167,7 +167,6 @@ def generate(rank_threshold=25):
         print()
         print(f"\t{msg}")
         print()
-        # le_rank = le_model.get_rank(repl)[0]
 
         print("\t(prefix & repl)")
         print()
@@ -176,8 +175,10 @@ def generate(rank_threshold=25):
         print(f"\t{msg}")
 
         prefix_rank = le_model.get_rank(prefix)[0]
-        le_rank = le_model.get_rank(prefix_repl)[0]
+        prefix_repl_rank = le_model.get_rank(prefix_repl)[0]
+        le_rank = le_model.get_rank(repl)[0]
         print(f"\t(prefix rank: {prefix_rank})")
+        print(f"\t(prefix & repl rank: {prefix_repl_rank})")
         print(f"\t(rank: {le_rank})")
         print()
 
