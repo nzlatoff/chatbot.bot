@@ -68,6 +68,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--length_desired",
+    type=int,
+    default=500,
+    help="Rank under which sentences are allowed to be sent. Defaults to 25.",
+)
+
+parser.add_argument(
     "--rank_threshold",
     type=int,
     default=25,
@@ -87,7 +94,6 @@ for k, v in vars(args).items():
 print()
 
 is_generating = False
-length_desired = 250
 
 replique_re = regex.compile("<\|s\|>\n(.*?)\n+<\|e\|>", regex.DOTALL)
 separators = "\n<|e|>\n<|s|>\n"
@@ -116,7 +122,7 @@ def generate(rank_threshold=25):
     # print("-"*40)
 
     prefix_enc = le_model.encode(prefix)
-    max_len = 1024 - length_desired
+    max_len = 1024 - args.length_desired
     if len(prefix_enc) > max_len:
         prefix_enc = prefix_enc[-max_len:]
         prefix = le_model.decode(prefix_enc)
@@ -127,7 +133,7 @@ def generate(rank_threshold=25):
     l = le_model.gen(prefix=prefix,
                      temperature=args.temperature,
                      top_p=args.top_p,
-                     length=length_desired)[0]
+                     length=args.length_desired)[0]
     l = regex.sub(r"<\|endoftext\|>", "", l) # no openai marker
     generated = l[end_pref:]
 
