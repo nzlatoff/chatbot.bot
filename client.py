@@ -234,7 +234,7 @@ def connect():
     print("connection established")
     print("-"*40)
     print()
-    sio.emit("new user", args.server_name)
+    sio.emit("new bot", args.server_name)
 
 @sio.event
 def connect_error(e):
