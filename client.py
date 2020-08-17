@@ -43,7 +43,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--network_print_speed",
+    "--print_speed",
     type=float,
     default=0.1,
     help="Length of pause for each step of interactive print loop, in ms.",
@@ -77,13 +77,22 @@ args = parser.parse_args()
 
 sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
+
+def print_underlined(msg):
+    print(msg)
+    print("-" * len(msg))
+
+
+def print_config():
+    print("-" * 40)
+    print("(settings:)")
+    print()
+    for k, v in vars(args).items():
+        print(f"- {k}: {v}")
+    print()
+
+
 le_model = Model(model_name=args.model, run_name=args.run_name)
-print("-" * 40)
-print("(settings:)")
-print()
-for k, v in vars(args).items():
-    print(f"- {k}: {v}")
-print()
 
 is_generating = False
 
@@ -95,6 +104,8 @@ start = "<|s|>\n"
 resetting_session = False
 messages = []
 prefix = ""
+
+print_config()
 
 
 def generate(rank_threshold=25):
@@ -191,7 +202,7 @@ def generate(rank_threshold=25):
             print(msg)
             print()
 
-            if args.network_print_speed > 0:
+            if args.print_speed > 0:
                 for i in range(len(message) + 1):
 
                     if should_sess_be_reset():
@@ -206,7 +217,7 @@ def generate(rank_threshold=25):
                             "user": args.server_name,
                         }
                     )
-                    time.sleep(args.network_print_speed)
+                    time.sleep(args.print_speed)
 
             if should_sess_be_reset():
                 return
@@ -336,12 +347,30 @@ def send_config():
             "model": args.model,
             "run": args.run_name,
             "temperature": args.temperature,
-            "top p": args.top_p,
-            "print speed": args.network_print_speed,
-            "length desired": args.length_desired,
-            "rank threshold": args.rank_threshold,
+            "top_p": args.top_p,
+            "print_speed": args.print_speed,
+            "length_desired": args.length_desired,
+            "rank_threshold": args.rank_threshold,
         },
     )
+
+
+@sio.on("server sets bot config")
+def set_config(data):
+    if data["id"] == sio.sid:
+        print_underlined("received config:")
+        for k, v in data.items():
+            if k in {"user", "id", "run", "model"}:
+                continue
+            try:
+                v = type(args.__getattribute__(k))(v)
+                print(f"{k}: {v}")
+            except:
+                print(
+                    f"\033[31m!! {k}: cannot cast {v} to {type(args.__getattribute__(k))}, ignoring...\033[0m"
+                )
+                continue
+            args.__setattr__(k, v)
 
 
 def send_typing(data):
