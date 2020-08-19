@@ -108,51 +108,65 @@ def print_config():
     print()
 
 
+def pprint(msg, o="", sep=False, sp_bf=False, sp_aft=False, und=False):
+    if sp_bf:
+        print()
+    if sep:
+        print(o + "-" * 40)
+    if und:
+        print(f"{o}{msg}")
+        print(o + "-" * len(msg))
+    else:
+        print(
+            "\n".join(textwrap.wrap(msg, width=40, initial_indent=o, subsequent_indent=o))
+        )
+    if sp_aft:
+        print()
+
+
 le_model = Model(model_name=args.model, run_name=args.run_name)
 
-is_generating = False
+RESETTING_SESSION = False
+IS_GENERATING = False
 
-replique_re = regex.compile("<\|s\|>\n(.*?)\n+<\|e\|>", regex.DOTALL)
-separators = "\n<|e|>\n<|s|>\n"
-end = "\n<|e|>\n"
-start = "<|s|>\n"
+REPLIQUE_RE = regex.compile("<\|s\|>\n(.*?)\n+<\|e\|>", regex.DOTALL)
+SEPARATORS = "\n<|e|>\n<|s|>\n"
+END = "\n<|e|>\n"
+START = "<|s|>\n"
 
-resetting_session = False
-messages = []
-prefix = ""
+MESSAGES = []
+PREFIX = ""
 
 print_config()
 
 
 def generate(rank_threshold=25):
 
-    global is_generating
-    global marker_re
-    global pref_re
-    global prefix
-    global start
+    global IS_GENERATING
+    global PREFIX
+    global START
 
-    is_generating = True
+    IS_GENERATING = True
 
     if should_sess_be_reset():
         return
 
     # print("-"*40)
-    # print("prefix:")
-    # print(prefix)
+    # print("(prefix:)")
+    # print(PREFIX)
     # print("-"*40)
 
-    prefix_enc = le_model.encode(prefix)
+    prefix_enc = le_model.encode(PREFIX)
     max_len = 1024 - args.length_desired
     if len(prefix_enc) > max_len:
         prefix_enc = prefix_enc[-max_len:]
-        prefix = le_model.decode(prefix_enc)
+        PREFIX = le_model.decode(prefix_enc)
 
-    # add end of answer, store length of prefix
-    end_pref = len(prefix)
+    # add END of answer, store length of PREFIX
+    end_pref = len(PREFIX)
 
     l = le_model.gen(
-        prefix=prefix,
+        prefix=PREFIX,
         temperature=args.temperature,
         top_p=args.top_p,
         top_k=args.top_k,
@@ -161,15 +175,10 @@ def generate(rank_threshold=25):
     l = regex.sub(r"<\|endoftext\|>", "", l)  # no openai marker
     generated = l[end_pref:]
 
-    print()
-    print("\t\t\t" + "-" * 40)
-    print("\t\t\t(raw)")
-    print()
-    msg = "\n\t\t\t".join(textwrap.wrap(generated, width=40))
-    print(f"\t\t\t{msg}")
-    print()
+    pprint("(raw)", o="\t\t\t", sep=True, sp_bf=True, sp_aft=True)
+    pprint(generated, o="\t\t\t")
 
-    r = regex.search(replique_re, generated)
+    r = regex.search(REPLIQUE_RE, generated)
 
     if r:
         repl = r.group(1)
@@ -180,41 +189,26 @@ def generate(rank_threshold=25):
             char = regex.sub("<\|[es]\|>", "", repl[: repl.find("\n")])
             message = regex.sub("<\|[es]\|>", "", repl[repl.find("\n") + 1 :])
 
-        print("\t\t" + "-" * 40)
-        print("\t\t(generated)")
-        print()
-        rmsg = "\n\t\t".join(textwrap.wrap(repl, width=40))
-        print(f"\t\t{rmsg}")
-        print()
+        pprint("(generated)", o="\t\t", sep=True, sp_bf=True, sp_aft=True)
+        pprint(repl, o="\t\t")
 
-        print("\t" + "-" * 40)
-        print("\t(char)")
-        print()
-        print(f"\t{char}")
-        print()
-        msg = "\n\t".join(textwrap.wrap(message, width=40))
-        print("\t(message)")
-        print()
-        print(f"\t{msg}")
-        print()
+        pprint("(char)", o="\t", sep=True, sp_bf=True, sp_aft=True)
+        pprint(char, o="\t", sp_aft=True)
+        pprint("(message)", o="\t", sp_aft=True)
+        pprint(message, o="\t")
 
-        print("\t(prefix & repl)")
-        print()
-        prefix_repl = f"{prefix} \u001b[31m|\u001b[0m {r.group(0)}"
-        msg = "\n\t".join(textwrap.wrap(prefix_repl, width=40))
-        print(f"\t{msg}")
+        prefix_repl = f"{PREFIX} \u001b[31m|\u001b[0m {r.group(0)}"
+        pprint(prefix_repl, o="\t")
 
-        prefix_rank = le_model.get_rank(prefix)[0]
+        prefix_rank = le_model.get_rank(PREFIX)[0]
         prefix_repl_rank = le_model.get_rank(prefix_repl)[0]
         le_rank = le_model.get_rank(repl)[0]
-        print(f"\t(prefix rank: {prefix_rank})")
-        print(f"\t(prefix & repl rank: {prefix_repl_rank})")
-        print(f"\t(rank: {le_rank})")
-        print()
+
+        pprint(f"(prefix rank: {prefix_rank})", o="\t")
+        pprint(f"(prefix & repl rank: {prefix_repl_rank})", o="\t")
+        pprint(f"(rank: {le_rank})", o="\t")
 
         if le_rank < rank_threshold:
-            print("-" * 40)
-            print(char)
             msg = "\n".join(textwrap.wrap(message, width=40))
             print(msg)
             print()
@@ -242,34 +236,30 @@ def generate(rank_threshold=25):
             send_message(
                 {"character": char, "message": message, "user": args.server_name}
             )
-            prefix = f"{prefix}{start}{char}\n{message}"
+            PREFIX = f"{PREFIX}{START}{char}\n{message}"
         else:
-            print()
-            print("\t(RANK INSUFFICIENT: NOT ANSWERING)")
-            print()
+            pprint(
+                "(RANK INSUFFICIENT: NOT ANSWERING)", o="\t", sp_bf=True, sp_aft=True
+            )
     else:
-        msg = "\n\t\t".join(textwrap.wrap(l, width=40))
-        print("\t\t" + "-" * 40)
-        print("\t\t(generated:)")
-        print("\t\t" + msg)
-        print()
-        print("\t\t(MARKERS NOT FOUND: NOT ANSWERING)")
-        print()
+        pprint("(picked:)", o="\t\t", sep=True, sp_bf=True, sp_aft=True)
+        pprint(l, o="\t\t", sp_aft=True)
+        pprint("(MARKERS NOT FOUND: NOT ANSWERING)", o="\t\t")
 
-    is_generating = False
+    IS_GENERATING = False
     if should_sess_be_reset():
         return
 
 
 def should_sess_be_reset():
-    global resetting_session
-    global is_generating
-    if resetting_session:
+    global RESETTING_SESSION
+    global IS_GENERATING
+    if RESETTING_SESSION:
         print(f"generation interrupted")
         print()
         print("=" * 40)
-        is_generating = False
-        resetting_session = False
+        IS_GENERATING = False
+        RESETTING_SESSION = False
         return True
 
 
@@ -292,21 +282,22 @@ def disconnect():
     print("-" * 40)
 
 
-@sio.on("erase messages")
+@sio.on("erase MESSAGES")
 def reset_session():
 
-    global resetting_session
-    global messages
-    global prefix
+    global RESETTING_SESSION
+    global MESSAGES
+    global PREFIX
 
     print()
     print("=" * 40)
     print()
     print("resetting session")
-    messages = []
-    prefix = ""
-    if is_generating:
-        resetting_session = True
+
+    MESSAGES = []
+    PREFIX = ""
+    if IS_GENERATING:
+        RESETTING_SESSION = True
     else:
         print()
         print("=" * 40)
@@ -315,43 +306,34 @@ def reset_session():
 @sio.on("received")
 def on_chat_message(data):
 
-    global is_generating
-    global prefix
+    global IS_GENERATING
+    global PREFIX
 
     char = data["character"].replace("\n", "\t\n")
     msg = data["message"].replace("\n", "\t\n")
 
-    print("\t" + "-" * 40)
-    print("\t(received)")
-    print()
+    pprint("(received)", o="\t", sep=True, sp_bf=True, sp_aft=True)
     if data["character"]:
-        print(f"\t{char}")
+        pprint(f"{char}", o="\t")
     if data["message"]:
-        print(f"\t{msg}")
+        pprint(f"{msg}", o="\t")
 
-    messages.append(data)
+    MESSAGES.append(data)
     character = data["character"]
     message = data["message"]
     if character:
-        prefix = f"{prefix}{separators}{character}\n{message}{end}"
+        PREFIX = f"{PREFIX}{SEPARATORS}{character}\n{message}{END}"
     else:
-        prefix = f"{prefix}{separators}{message}{end}"
-    # print("prefix now:")
-
-    # print(prefix)
-    # print("-"*40)
+        PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
 
     rand = random.random()
-    print("\t" + "-" * 40)
-    print(f"\trandom has spoken: {rand}")
-    if not is_generating:
+    pprint(f"(random has spoken: {rand})", o="\t", sp_bf=True)
+    if not IS_GENERATING:
         if rand > 0:
-            print("\t(random is bountiful, let's generate)")
-            print()
+            pprint("(random is bountiful, let's generate)", o="\t", sp_aft=True)
             generate(rank_threshold=args.rank_threshold)
     else:
-        print("\t(is generating, not answering...)")
-        print()
+        pprint("(is generating, not answering...)", o="\t", sp_aft=True)
 
 
 @sio.on("get bot config")
@@ -376,19 +358,20 @@ def send_config():
 @sio.on("server sets bot config")
 def set_config(data):
     if data["id"] == sio.sid:
-        print_underlined("received config:")
+        pprint("received config:", sep=True, sp_bf=True, und=True)
         for k, v in data.items():
             if k in {"user", "id", "run", "model"}:
                 continue
             try:
                 v = type(args.__getattribute__(k))(v)
                 print(f"{k}: {v}")
+                args.__setattr__(k, v)
             except:
                 print(
                     f"\033[31m!! {k}: cannot cast {v} to {type(args.__getattribute__(k))}, ignoring...\033[0m"
                 )
                 continue
-            args.__setattr__(k, v)
+        print()
 
 
 def send_typing(data):
