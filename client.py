@@ -39,7 +39,23 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--top_p", type=float, default=0.998, help="Nucleus sampling when sampling.",
+    "--top_p",
+    type=float,
+    default=0.998,
+    help="""Nucleus sampling when
+    sampling: limit sampling to the most likely tokens the combined probability
+    of which is at most p (sometimes the combined probability of a few tokens
+    reaches p (only a few likely choices), sometimes many thousands are needed
+    to reach the same p (high uncertainty / many possible choices). Defaults to
+    0.998 (1 to neutralise).""",
+)
+
+parser.add_argument(
+    "--top_k",
+    type=int,
+    default=0,
+    help="""Limit sampled tokens to the k most
+    likely ones. Defaults to 0 (deactivated).""",
 )
 
 parser.add_argument(
@@ -139,6 +155,7 @@ def generate(rank_threshold=25):
         prefix=prefix,
         temperature=args.temperature,
         top_p=args.top_p,
+        top_k=args.top_k,
         length=args.length_desired,
     )[0]
     l = regex.sub(r"<\|endoftext\|>", "", l)  # no openai marker
@@ -348,6 +365,7 @@ def send_config():
             "run": args.run_name,
             "temperature": args.temperature,
             "top_p": args.top_p,
+            "top_k": args.top_k,
             "print_speed": args.print_speed,
             "length_desired": args.length_desired,
             "rank_threshold": args.rank_threshold,
