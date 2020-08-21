@@ -78,28 +78,32 @@ class Model:
         top_k=0,
         top_p=0.0,
         batch_size=None,
-        reverse=False,
+        return_tokens=False,
     ):
         """
         Higher level generation: input a sentence, get an array with n batches
         of continuations.
         """
         self.check_batch_size(batch_size)
-        context_tokens = self.batch_size * [self.encode(prefix)]
+        if self.reverse:
+            pref = self.encode(prefix)[::-1]
+        else:
+            pref = self.encode(prefix)
+        context_tkns = self.batch_size * [pref]
         tkns, logits = self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
-                self.context: context_tokens,
+                self.context: context_tkns,
                 self.temperature: temperature,
                 self.top_k: top_k,
                 self.top_p: top_p,
             },
         )
-        if reverse:
-            return self.decode(tkns[:, ::-1])
+        if self.reverse:
+            return self.decode(tkns[:, ::-1]) if not return_tokens else tkns[:, ::-1]
         else:
-            return self.decode(tkns)
+            return self.decode(tkns) if not return_tokens else tkns
 
     def run(
         self,
