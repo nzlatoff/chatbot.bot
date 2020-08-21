@@ -2,6 +2,7 @@ from tensorflow.core.protobuf import rewriter_config_pb2
 from collections import defaultdict
 import tensorflow as tf
 import numpy as np
+import encoder_hug
 import encoder
 import random
 import model
@@ -24,24 +25,32 @@ class Model:
         run_name="run1",
         device="/GPU:0",
         batch_size=1,
-        encoder="hug",
+        encoder_type="default",
         special_tokens=["<|s|>", "<|e|>", "<|endoftext|>"],
         reverse=False,
     ):
+        tf.compat.v1.reset_default_graph()
         self.config = tf.compat.v1.ConfigProto()
         self.config.gpu_options.allow_growth = True
         self.config.graph_options.rewrite_options.layout_optimizer = (
             rewriter_config_pb2.RewriterConfig.OFF
         )
         self.sess = tf.compat.v1.Session(config=self.config)
-        if encoder == "hug":
+        if encoder_type == "hug":
             self.enc = encoder_hug.get_encoder(
                 model_name, "models", special_tokens=special_tokens
             )
+            self.encoder_type = "hug"
+            self.encoder = self.enc.tok.get_vocab()
+            self.decoder = {v: k for k, v in self.encoder}
         else:
             self.enc = encoder.get_encoder(
                 model_name, "models", special_tokens=special_tokens
             )
+            self.encoder_type = "default"
+            self.encoder = self.enc.encoder
+            self.decoder = self.enc.decoder
+        self.special_tokens = set(special_tokens)
         self.hparams = model.default_hparams()
         with open(f"models/{model_name}/hparams.json") as f:
             self.hparams.override_from_dict(json.load(f))
@@ -160,7 +169,6 @@ class Model:
             pref = self.encode(prefix)[::-1]
         else:
             pref = self.encode(prefix)
-        self.check_batch_size(batch_size)
         context_tokens = self.batch_size * [pref]
         tokens, logits = self.sess.run(
             self.output,
