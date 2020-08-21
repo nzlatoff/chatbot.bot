@@ -142,6 +142,83 @@ class Model:
         else:
             return self.decode(tkns) if not return_tokens else tkns
 
+    def gen_until(
+        self,
+        prefix="\n",
+        until="<|e|>",
+        exclude_until=True,
+        limit=200,
+        chunk_length=5,
+        temperature=1,
+        top_k=0,
+        top_p=0.0,
+        batch_size=None,
+    ):
+        self.check_batch_size(batch_size)
+        if until in self.special_tokens:
+            until = self.encode(until)[0]
+            use_regex = False
+        else:
+            rr = regex.compile(regex.escape(until))
+            use_regex = True
+
+        if self.reverse:
+            pref = self.encode(prefix)[::-1]
+        else:
+            pref = self.encode(prefix)
+
+        context_tkns = self.batch_size * [pref]
+
+        if not use_regex:
+            found = {i: None for i in range(self.batch_size)}
+            i = 0
+            while i < limit and not all(f is not None for f in found.values()):
+                tkns, _ = self.sess.run(
+                    self.output,
+                    feed_dict={
+                        self.length: chunk_length,
+                        self.context: context_tkns,
+                        self.temperature: temperature,
+                        self.top_k: top_k,
+                        self.top_p: top_p,
+                    },
+                )
+                found = self._find_token(
+                    until, tkns, found=found, exclude_until=exclude_until
+                )
+                context_tkns = tkns
+                i += 1
+                tkns = [seq[: found[i]] for i, seq in enumerate(tkns)]
+                if self.reverse:
+                    return self.decode(tkns[:, ::-1]) if not raw else tkns[:, ::-1]
+                else:
+                    return self.decode(tkns) if not raw else tkns
+        else:
+            seq_data = {
+                j: {"previous_length": len(prefix), "found": None, "seq": prefix,}
+                for j in range(self.batch_size)
+            }
+            i = 0
+            while i < limit and not all(
+                s["found"] is not None for s in seq_data.values()
+            ):
+                tkns, _ = self.sess.run(
+                    self.output,
+                    feed_dict={
+                        self.length: chunk_length,
+                        self.context: context_tkns,
+                        self.temperature: temperature,
+                        self.top_k: top_k,
+                        self.top_p: top_p,
+                    },
+                )
+                seq_data = self._find_regex(
+                    until, tkns, seq_data, exclude_until=exclude_until
+                )
+                context_tkns = tkns
+                i += 1
+            return [s["seq"] for s in seq_data.values()]
+
     def run(
         self,
         prefix="\n",
@@ -330,6 +407,50 @@ class Model:
     # - tok_k, top_p
     # - generation step
     # - sampling loop
+
+    def _find_token(
+        self, token, tkns, found=None, exclude_until=True,
+    ):
+        if found is None:
+            found = {i: None for i in range(self.batch_size)}
+        for i, seq in enumerate(tkns):
+            if not found[i] and token in seq:
+                found[i] = np.where(seq == token)[0][0]
+                if not exclude_until:
+                    found[i] += 1
+        return found
+
+    def _find_regex(
+        self, rr, tkns, seq_data, exclude_until=True,
+    ):
+        seqs = self.decode(tkns) if not self.reverse else self.decode(tkns[:, ::-1])
+        for i, seq in enumerate(seqs):
+            if not seq_data[i]["found"]:
+                if not self.reverse:
+                    found = regex.search(
+                        rr, seq_data[i]["seq"][seq_data[i]["previous_length"] :]
+                    )
+                else:
+                    found = regex.search(
+                        rr, seq_data[i]["seq"][: -seq_data[i]["previous_length"]]
+                    )
+                if found:
+                    if not self.reverse:
+                        seq_data[i]["found"] = (
+                            found.span()[0] if exclude_until else found.span()[1]
+                        )
+                        ind = seq_data[i]["previous_length"] + seq_data[i]["found"]
+                        seq_data[i]["seq"] = seq_data[i]["seq"][:ind]
+                    else:
+                        seq_data[i]["found"] = (
+                            found.span()[1] if exclude_until else found.span()[0]
+                        )
+                        seq_data[i]["seq"] = seq_data[i]["seq"][seq_data[i]["found"] :]
+                else:
+                    seq_data[i]["previous_length"] = len(seq_data[i]["seq"])
+                    seq_data[i]["seq"] = seq
+                    seq_data[i]["length"] = len(seq)
+        return seq_data
 
     def normalize(self, logits, verbose=False):
         """
