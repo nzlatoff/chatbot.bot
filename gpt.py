@@ -150,6 +150,8 @@ class Model:
         top_k=0,
         top_p=0.0,
         batch_size=None,
+        scores=True,
+        ranks=True,
     ):
         """
         Lower level generation: input a sentence, get n batches of generated
@@ -180,18 +182,27 @@ class Model:
                 self.top_p: top_p,
             },
         )
-
-        # extract scores & calculate perplexities
-        seq_len = len(tokens[0]) - 1
-        indz = (
-            tuple(((i,) * seq_len for i in range(self.batch_size))),
-            self.batch_size * (tuple(range(seq_len)),),
-            tuple(tuple(tkn) for tkn in tokens[:, 1:]),
-        )
-        scores = logits[indz]
-        perplexities = self._perplexities(scores)
-
-        return tokens, logits, scores, perplexities
+        data = {
+            "tokens": tokens,
+            "logits": logits,
+        }
+        if scores or ranks:
+            # extract scores & calculate perplexities
+            seq_len = len(tokens[0]) - 1
+            indz = (
+                tuple(((i,) * seq_len for i in range(self.batch_size))),
+                self.batch_size * (tuple(range(seq_len)),),
+                tuple(tuple(tkn) for tkn in tokens[:, 1:]),
+            )
+            scores = logits[indz]
+            perplexities = self._perplexities(scores)
+            data.update(
+                {"scores": scores, "perplexities": perplexities,}
+            )
+            if ranks:
+                ranks = self._ranks(logits, scores)
+                data["ranks"] = ranks
+        return data
 
     # --------------------------------------------------------------------------------
     # encoder/decoder utils
