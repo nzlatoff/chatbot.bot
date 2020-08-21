@@ -26,6 +26,7 @@ class Model:
         batch_size=1,
         encoder="hug",
         special_tokens=["<|s|>", "<|e|>", "<|endoftext|>"],
+        reverse=False,
     ):
         self.config = tf.compat.v1.ConfigProto()
         self.config.gpu_options.allow_growth = True
@@ -50,6 +51,7 @@ class Model:
         self.temperature = tf.compat.v1.placeholder(tf.float32, ())
         self.top_k = tf.compat.v1.placeholder(tf.int32, ())
         self.top_p = tf.compat.v1.placeholder(tf.float32, ())
+        self.reverse = reverse
         # required to load checkpoint
         self.model = model.model(hparams=self.hparams, X=self.context)
         self.load_checkpoint(f"checkpoint/{run_name}")
@@ -139,7 +141,6 @@ class Model:
         top_k=0,
         top_p=0.0,
         batch_size=None,
-        reverse=False,
     ):
         """
         Lower level generation: input a sentence, get n batches of generated
@@ -154,7 +155,8 @@ class Model:
             perplexities: the perplexity for each sentence
                     shape: (batch_size, 1)
         """
-        if reverse:
+        self.check_batch_size(batch_size)
+        if self.reverse:
             pref = self.encode(prefix)[::-1]
         else:
             pref = self.encode(prefix)
