@@ -70,6 +70,32 @@ class Model:
     # - generate text
     # - generate text & logits
 
+    def print(
+        self,
+        prefix="\n",
+        length=5,
+        temperature=1,
+        top_k=0,
+        top_p=0.0,
+        batch_size=None,
+        print_tokens=False,
+    ):
+        """
+        Highest level function, simply prints generated texts.
+        """
+        for seq in self.gen(
+            prefix=prefix,
+            length=length,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            batch_size=batch_size,
+            print_tokens=print_tokens,
+        ):
+            print("-" * 40)
+            print(seq)
+        print("-" * 40)
+
     def gen(
         self,
         prefix="\n",
