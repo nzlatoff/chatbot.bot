@@ -108,6 +108,13 @@ parser.add_argument(
     help="Rank under which sentences are allowed to be sent. Defaults to 25.",
 )
 
+parser.add_argument(
+    "--character",
+    type=str,
+    default="",
+    help="Character used by the network when answering. Defaults to none.",
+)
+
 args = parser.parse_args()
 
 sio = socketio.Client(logger=False, reconnection_delay_max=50)
@@ -207,6 +214,8 @@ def generate(rank_threshold=25):
         else:
             char = regex.sub("<\|[es]\|>", "", repl[: repl.find("\n")])
             message = regex.sub("<\|[es]\|>", "", repl[repl.find("\n") + 1 :])
+        if args.character:
+            char = args.character
 
         pprint("(generated)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
         pprint(repl, off="\t\t")
@@ -371,6 +380,7 @@ def send_config():
             "length_desired": args.length_desired,
             "random_threshold": args.random_threshold,
             "rank_threshold": args.rank_threshold,
+            "character": args.character,
         },
     )
 
