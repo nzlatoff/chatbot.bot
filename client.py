@@ -198,7 +198,6 @@ def generate(rank_threshold=25):
         top_k=args.top_k,
         length=args.length_desired,
     )[0]
-    l = regex.sub(r"<\|endoftext\|>", "", l)  # no openai marker
     generated = l[end_pref:]
 
     pprint("(raw)", off="\t\t\t", sep="-", sp_bf=True, sp_aft=True)
