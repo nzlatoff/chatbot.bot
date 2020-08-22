@@ -7,6 +7,17 @@ import random
 import regex
 import time
 
+# for random_threshold arg below
+# https://stackoverflow.com/a/12117065
+def float_range(x):
+    try:
+        x = float(x)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{x} not a floating-point literal")
+    if x < 0.0 or x > 1.0:
+        raise argparse.ArgumentTypeError(f"{x} not in range [0.0, 1.0]")
+    return x
+
 parser = argparse.ArgumentParser(
     description="""
     """,
@@ -78,6 +89,16 @@ parser.add_argument(
     type=int,
     default=500,
     help="Rank under which sentences are allowed to be sent. Defaults to 25.",
+)
+
+parser.add_argument(
+    "--random_threshold",
+    type=float_range,
+    default=0.0,
+    help="""A random number between 0 and 1 is generated each time the network
+    receives a new message. If the number is above the threshold, the network
+    answers. Must lie withinin [0:1]. Defaults to 0 (the network answering
+    mechanism is fired every time).""",
 )
 
 parser.add_argument(
@@ -327,7 +348,7 @@ def on_chat_message(data):
     rand = random.random()
     pprint(f"(random has spoken: {rand})", off="\t", sp_bf=True)
     if not IS_GENERATING:
-        if rand > 0:
+        if rand > args.random_threshold:
             pprint("(random is bountiful, let's generate)", off="\t", sp_aft=True)
             generate(rank_threshold=args.rank_threshold)
     else:
@@ -348,6 +369,7 @@ def send_config():
             "top_k": args.top_k,
             "print_speed": args.print_speed,
             "length_desired": args.length_desired,
+            "random_threshold": args.random_threshold,
             "rank_threshold": args.rank_threshold,
         },
     )
