@@ -42,13 +42,11 @@ parser.add_argument(
     "--top_p",
     type=float,
     default=0.998,
-    help="""Nucleus sampling when
-    sampling: limit sampling to the most likely tokens the combined probability
-    of which is at most p (sometimes the combined probability of a few tokens
-    reaches p (only a few likely choices), sometimes many thousands are needed
-    to reach the same p (high uncertainty / many possible choices). Defaults to
-    0.998 (1 to neutralise).""",
-)
+    help="""Nucleus sampling when sampling: limit sampling to the most likely
+    tokens the combined probability of which is at most p (sometimes the
+    combined probability of a few tokens reaches p (only a few likely choices),
+    sometimes many thousands are needed to reach the same p (high uncertainty /
+    many possible choices). Defaults to 0.998 (1 to neutralise).""",)
 
 parser.add_argument(
     "--top_k",
@@ -108,17 +106,17 @@ def print_config():
     print()
 
 
-def pprint(msg, o="", sep=False, sp_bf=False, sp_aft=False, und=False):
+def pprint(msg, width=40, off="", sep="", sp_bf=False, sp_aft=False, und=False):
     if sp_bf:
         print()
     if sep:
-        print(o + "-" * 40)
+        print(off + sep * width)
     if und:
-        print(f"{o}{msg}")
-        print(o + "-" * len(msg))
+        print(f"{off}{msg}")
+        print(off + "-" * len(msg))
     else:
         print(
-            "\n".join(textwrap.wrap(msg, width=40, initial_indent=o, subsequent_indent=o))
+            "\n".join(textwrap.wrap(msg, width=width, initial_indent=off, subsequent_indent=off))
         )
     if sp_aft:
         print()
@@ -175,8 +173,8 @@ def generate(rank_threshold=25):
     l = regex.sub(r"<\|endoftext\|>", "", l)  # no openai marker
     generated = l[end_pref:]
 
-    pprint("(raw)", o="\t\t\t", sep=True, sp_bf=True, sp_aft=True)
-    pprint(generated, o="\t\t\t")
+    pprint("(raw)", off="\t\t\t", sep="-", sp_bf=True, sp_aft=True)
+    pprint(generated, off="\t\t\t")
 
     r = regex.search(REPLIQUE_RE, generated)
 
@@ -189,29 +187,29 @@ def generate(rank_threshold=25):
             char = regex.sub("<\|[es]\|>", "", repl[: repl.find("\n")])
             message = regex.sub("<\|[es]\|>", "", repl[repl.find("\n") + 1 :])
 
-        pprint("(generated)", o="\t\t", sep=True, sp_bf=True, sp_aft=True)
-        pprint(repl, o="\t\t")
+        pprint("(generated)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+        pprint(repl, off="\t\t")
 
-        pprint("(char)", o="\t", sep=True, sp_bf=True, sp_aft=True)
-        pprint(char, o="\t", sp_aft=True)
-        pprint("(message)", o="\t", sp_aft=True)
-        pprint(message, o="\t")
+        pprint("(char)", off="\t", sep="-", sp_bf=True, sp_aft=True)
+        pprint(char, off="\t", sp_aft=True)
+        pprint("(message)", off="\t", sp_aft=True)
+        pprint(message, off="\t")
 
         prefix_repl = f"{PREFIX} \u001b[31m|\u001b[0m {r.group(0)}"
-        pprint(prefix_repl, o="\t")
+        pprint(prefix_repl, off="\t")
 
         prefix_rank = le_model.get_rank(PREFIX)[0]
         prefix_repl_rank = le_model.get_rank(prefix_repl)[0]
         le_rank = le_model.get_rank(repl)[0]
 
-        pprint(f"(prefix rank: {prefix_rank})", o="\t")
-        pprint(f"(prefix & repl rank: {prefix_repl_rank})", o="\t")
-        pprint(f"(rank: {le_rank})", o="\t")
+        pprint(f"(prefix rank: {prefix_rank})", off="\t")
+        pprint(f"(prefix & repl rank: {prefix_repl_rank})", off="\t")
+        pprint(f"(rank: {le_rank})", off="\t")
 
         if le_rank < rank_threshold:
-            msg = "\n".join(textwrap.wrap(message, width=40))
-            print(msg)
-            print()
+            pprint("(sent)", sep="-", sp_bf=True, sp_aft=True)
+            pprint(char)
+            pprint(message)
 
             if args.print_speed > 0:
                 for i in range(len(message) + 1):
@@ -239,12 +237,12 @@ def generate(rank_threshold=25):
             PREFIX = f"{PREFIX}{START}{char}\n{message}"
         else:
             pprint(
-                "(RANK INSUFFICIENT: NOT ANSWERING)", o="\t", sp_bf=True, sp_aft=True
+                "(RANK INSUFFICIENT: NOT ANSWERING)", off="\t", sp_bf=True, sp_aft=True
             )
     else:
-        pprint("(picked:)", o="\t\t", sep=True, sp_bf=True, sp_aft=True)
-        pprint(l, o="\t\t", sp_aft=True)
-        pprint("(MARKERS NOT FOUND: NOT ANSWERING)", o="\t\t")
+        pprint("(picked:)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+        pprint(l, off="\t\t", sp_aft=True)
+        pprint("(MARKERS NOT FOUND: NOT ANSWERING)", off="\t\t")
 
     IS_GENERATING = False
     if should_sess_be_reset():
@@ -272,7 +270,7 @@ def connect():
 
 @sio.event
 def connect_error(e):
-    print("The connection failed!")
+    print("connection failed")
     print(e)
 
 
@@ -282,7 +280,7 @@ def disconnect():
     print("-" * 40)
 
 
-@sio.on("erase MESSAGES")
+@sio.on("erase messages")
 def reset_session():
 
     global RESETTING_SESSION
@@ -312,11 +310,11 @@ def on_chat_message(data):
     char = data["character"].replace("\n", "\t\n")
     msg = data["message"].replace("\n", "\t\n")
 
-    pprint("(received)", o="\t", sep=True, sp_bf=True, sp_aft=True)
+    pprint("(received)", off="\t", sep="-", sp_bf=True, sp_aft=True)
     if data["character"]:
-        pprint(f"{char}", o="\t")
+        pprint(f"{char}", off="\t")
     if data["message"]:
-        pprint(f"{msg}", o="\t")
+        pprint(f"{msg}", off="\t")
 
     MESSAGES.append(data)
     character = data["character"]
@@ -327,13 +325,13 @@ def on_chat_message(data):
         PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
 
     rand = random.random()
-    pprint(f"(random has spoken: {rand})", o="\t", sp_bf=True)
+    pprint(f"(random has spoken: {rand})", off="\t", sp_bf=True)
     if not IS_GENERATING:
         if rand > 0:
-            pprint("(random is bountiful, let's generate)", o="\t", sp_aft=True)
+            pprint("(random is bountiful, let's generate)", off="\t", sp_aft=True)
             generate(rank_threshold=args.rank_threshold)
     else:
-        pprint("(is generating, not answering...)", o="\t", sp_aft=True)
+        pprint("(is generating, not answering...)", off="\t", sp_aft=True)
 
 
 @sio.on("get bot config")
@@ -358,7 +356,7 @@ def send_config():
 @sio.on("server sets bot config")
 def set_config(data):
     if data["id"] == sio.sid:
-        pprint("received config:", sep=True, sp_bf=True, und=True)
+        pprint("received config:", sep="-", sp_bf=True, und=True)
         for k, v in data.items():
             if k in {"user", "id", "run", "model"}:
                 continue
