@@ -1,5 +1,6 @@
 from base64 import b64encode
 from gpt import Model
+import numpy as np
 import socketio
 import argparse
 import textwrap
@@ -17,6 +18,7 @@ def float_range(x):
     if x < 0.0 or x > 1.0:
         raise argparse.ArgumentTypeError(f"{x} not in range [0.0, 1.0]")
     return x
+
 
 parser = argparse.ArgumentParser(
     description="""
@@ -45,6 +47,15 @@ parser.add_argument(
     help="Server name used in message.",
 )
 
+parser.add_argument("--new", action="store_true", help="Use the new generate function.")
+
+parser.add_argument(
+    "--batch_size",
+    type=int,
+    default=1,
+    help="""Number of sentences generated in parallel.  Defaults to 1.""",
+)
+
 parser.add_argument(
     "--temperature", type=float, default=0.9, help="Temperature when sampling.",
 )
@@ -57,7 +68,8 @@ parser.add_argument(
     tokens the combined probability of which is at most p (sometimes the
     combined probability of a few tokens reaches p (only a few likely choices),
     sometimes many thousands are needed to reach the same p (high uncertainty /
-    many possible choices). Defaults to 0.998 (1 to neutralise).""",)
+    many possible choices). Defaults to 0.998 (1 to neutralise).""",
+)
 
 parser.add_argument(
     "--top_k",
@@ -158,7 +170,13 @@ def pprint(
         print()
 
 
-le_model = Model(model_name=args.model, run_name=args.run_name)
+le_model = Model(
+    model_name=args.model,
+    run_name=args.run_name,
+    special_tokens=["<|endoftext|>"]
+    if not args.new
+    else ["<|s|>", "<|e|>", "<|endoftext|>"],
+)
 
 RESETTING_SESSION = False
 IS_GENERATING = False
@@ -171,10 +189,113 @@ START = "<|s|>\n"
 MESSAGES = []
 PREFIX = ""
 
+TKNS = np.array([], dtype=np.int32)
+END_PREF = 0
+
 print_config()
 
 
-def generate(rank_threshold=25):
+def fancy_typing(char, message):
+    if args.print_speed > 0:
+        for i in range(len(message) + 1):
+            if should_sess_be_reset():
+                return
+            # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
+            send_typing(
+                {
+                    "id": sio.sid,
+                    "character": char,
+                    "message": message[:i],
+                    "user": args.server_name,
+                }
+            )
+            time.sleep(args.print_speed)
+
+
+def generate_new():
+
+    global IS_GENERATING
+    global END_PREF
+    global TKNS
+
+    # pprint("(tkns)", sep="-", sp_bf=True, sp_aft=True)
+    # print(TKNS)
+
+    # pprint("(prefix)", sp_bf=True, sp_aft=True)
+    # pprint(le_model.decode(TKNS), sp_aft=True)
+
+    IS_GENERATING = True
+
+    if should_sess_be_reset():
+        return
+
+    # END_PREF = len(TKNS)
+
+    tkns_batch = le_model.gen_until(
+        prefix=TKNS,
+        until="<|s|>",
+        exclude_until=False,
+        limit=300,
+        chunk_length=5,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        top_k=args.top_k,
+        batch_size=args.batch_size,
+        return_tokens=True,
+        skip_encoding=True,
+    )
+
+    print(tkns_batch)
+    generated = le_model.decode([tkns[END_PREF:] for tkns in tkns_batch])[0].strip()
+
+    if generated.find("\n") == -1:
+        char = ""
+        message = generated
+    else:
+        char = generated[: generated.find("\n")]
+        message = generated[generated.find("\n") + 1 :]
+
+    pprint("(generated)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+    pprint(generated, off="\t\t")
+    # [pprint(g, off="\t\t", sep_aft="*", sp_aft=True) for g in generated]
+
+    pprint("(char)", off="\t", sep="-", sp_bf=True, sp_aft=True)
+    pprint(char, off="\t", sp_aft=True)
+    pprint("(message)", off="\t", sp_aft=True)
+    pprint(message, off="\t")
+
+    # prefix_rank = le_model.get_rank(PREFIX)[0]
+    # prefix_repl_rank = le_model.get_rank(prefix_repl)[0]
+    # le_rank = le_model.get_rank(repl)[0]
+
+    # pprint(f"(prefix rank: {prefix_rank})", off="\t")
+    # pprint(f"(prefix & repl rank: {prefix_repl_rank})", off="\t")
+    # pprint(f"(rank: {le_rank})", off="\t")
+
+    # if le_rank < args.rank_threshold:
+
+    pprint("(sent)", sep="-", sp_bf=True, sp_aft=True)
+    pprint(char)
+    pprint(message)
+
+    fancy_typing(char, message)
+
+    if should_sess_be_reset():
+        return
+
+    send_message({"character": char, "message": message, "user": args.server_name})
+
+    TKNS = tkns_batch[0]
+
+    # else:
+    #     pprint("(RANK INSUFFICIENT: NOT ANSWERING)", off="\t", sp_bf=True, sp_aft=True)
+
+    IS_GENERATING = False
+    if should_sess_be_reset():
+        return
+
+
+def generate():
 
     global IS_GENERATING
     global PREFIX
@@ -243,27 +364,12 @@ def generate(rank_threshold=25):
         pprint(f"(prefix & repl rank: {prefix_repl_rank})", off="\t")
         pprint(f"(rank: {le_rank})", off="\t")
 
-        if le_rank < rank_threshold:
+        if le_rank < args.rank_threshold:
             pprint("(sent)", sep="-", sp_bf=True, sp_aft=True)
             pprint(char)
             pprint(message)
 
-            if args.print_speed > 0:
-                for i in range(len(message) + 1):
-
-                    if should_sess_be_reset():
-                        return
-
-                    # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
-                    send_typing(
-                        {
-                            "id": sio.sid,
-                            "character": char,
-                            "message": message[:i],
-                            "user": args.server_name,
-                        }
-                    )
-                    time.sleep(args.print_speed)
+            fancy_typing(char, message)
 
             if should_sess_be_reset():
                 return
@@ -342,31 +448,47 @@ def reset_session():
 def on_chat_message(data):
 
     global IS_GENERATING
+    global END_PREF
+    global MESSAGES
     global PREFIX
+    global TKNS
 
-    char = data["character"].replace("\n", "\t\n")
-    msg = data["message"].replace("\n", "\t\n")
+    char = data["character"]
+    msg = data["message"]
 
     pprint("(received)", off="\t", sep="-", sp_bf=True, sp_aft=True)
     if data["character"]:
         pprint(f"{char}", off="\t")
     if data["message"]:
-        pprint(f"{msg}", off="\t")
+        pprint(f"{msg}", off="\t", sp_aft=True)
 
     MESSAGES.append(data)
     character = data["character"]
     message = data["message"]
     if character:
         PREFIX = f"{PREFIX}{SEPARATORS}{character}\n{message}{END}"
+        TKNS = np.concatenate((TKNS, le_model.encode(f"{character}\n{message}{SEPARATORS}")))
     else:
         PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
+        TKNS = np.concatenate((TKNS, le_model.encode(f"{message}{SEPARATORS}")))
+
+    END_PREF = len(TKNS)
+    if args.character:
+        TKNS = np.concatenate((TKNS, le_model.encode(f"{args.character}")))
+
+    # pprint("(after reception, TKNS are now:)", sep="-", sp_bf=True)
+    # print(TKNS[0], type(TKNS[0]))
+    # pprint(le_model.decode(TKNS)[0], sp_aft=True)
 
     rand = random.random()
     pprint(f"(random has spoken: {rand})", off="\t", sp_bf=True)
     if not IS_GENERATING:
         if rand > args.random_threshold:
             pprint("(random is bountiful, let's generate)", off="\t", sp_aft=True)
-            generate(rank_threshold=args.rank_threshold)
+            if args.new:
+                generate_new()
+            else:
+                generate()
     else:
         pprint("(is generating, not answering...)", off="\t", sp_aft=True)
 
