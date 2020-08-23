@@ -121,7 +121,7 @@ class Model:
         Higher level generation: input a sentence, get an array with n batches
         of continuations.
         """
-        self.check_batch_size(batch_size)
+        self._check_batch_size(batch_size)
         if self.reverse:
             pref = self.encode(prefix)[::-1]
         else:
@@ -155,7 +155,7 @@ class Model:
         batch_size=None,
         return_tokens=False,
     ):
-        self.check_batch_size(batch_size)
+        self._check_batch_size(batch_size)
         if until in self.special_tokens:
             until = self.encode(until)[0]
             use_regex = False
@@ -244,7 +244,7 @@ class Model:
             perplexities: the perplexity for each sentence
                     shape: (batch_size, 1)
         """
-        self.check_batch_size(batch_size)
+        self._check_batch_size(batch_size)
         if self.reverse:
             pref = self.encode(prefix)[::-1]
         else:
@@ -347,7 +347,7 @@ class Model:
     def reset(
         self, hparams_file=None, device="/GPU:0", batch_size=1, top_k=0.0, top_p=0.0
     ):
-        self.check_hparams(hparams_file)
+        self._check_hparams(hparams_file)
         self.batch_size = batch_size
         self.context = tf.compat.v1.placeholder(tf.int32, [self.batch_size, None])
         self.model = model.model(hparams=self.hparams, X=self.context)
@@ -368,13 +368,13 @@ class Model:
         print(f"Loading checkpoint {self.ckpt}")
         self.saver.restore(self.sess, self.ckpt)
 
-    def check_hparams(self, hparams_file):
+    def _check_hparams(self, hparams_file):):
         if hparams_file is not None:
             print(f"Reloading hparams from file {hparams_file}")
             with open(hparams_file) as f:
                 self.hparams.override_from_dict(json.load(f))
 
-    def check_batch_size(self, batch_size, verbose=True):
+    def _check_batch_size(self, batch_size, verbose=True):
         """
         Returns self.batch_size if batch_size is None.
         Else runs reset() to redraw the graph with a new batch_size.
@@ -743,10 +743,10 @@ class Model:
                     or, if last_only is True: (batch_size, 1, n_vocab)
         """
         if not isinstance(context_tokens[0], (list, tuple, np.ndarray)):
-            self.check_batch_size(1, verbose=verbose)
+            self._check_batch_size(1, verbose=verbose)
             context = self.batch_size * [context_tokens]
         else:
-            self.check_batch_size(len(context_tokens), verbose=verbose)
+            self._check_batch_size(len(context_tokens), verbose=verbose)
             context = context_tokens
         logits = self.sess.run(self.model, feed_dict={self.context: context})["logits"]
         # all logits starting from the second token, n logits for n tokens
