@@ -154,6 +154,7 @@ class Model:
         top_p=0.0,
         batch_size=None,
         return_tokens=False,
+        skip_encoding=False,
     ):
         self._check_batch_size(batch_size)
         if until in self.special_tokens:
@@ -164,16 +165,19 @@ class Model:
             use_regex = True
 
         if self.reverse:
-            pref = self.encode(prefix)[::-1]
+            pref = self.encode(prefix)[::-1] if not skip_encoding else prefix[::-1]
         else:
-            pref = self.encode(prefix)
+            pref = self.encode(prefix) if not skip_encoding else prefix
 
         context_tkns = self.batch_size * [pref]
 
         if not use_regex:
-            batch_data = [None for _ in range(self.batch_size)]
+            batch_data = [
+                {"previous_length": len(pref), "index": None, "seq": pref,}
+                for _ in range(self.batch_size)
+            ]
             i = 0
-            while i < limit and not all(f is not None for f in batch_data):
+            while i < limit and not all(s["index"] is not None for s in batch_data):
                 tkns, _ = self.sess.run(
                     self.output,
                     feed_dict={
@@ -185,24 +189,25 @@ class Model:
                     },
                 )
                 batch_data = self._find_token(
-                    until, tkns, batch_data=batch_data, exclude_until=exclude_until
+                    until,
+                    tkns,
+                    batch_data=batch_data,
+                    chunk_length=chunk_length,
+                    exclude_until=exclude_until,
                 )
                 context_tkns = tkns
                 i += 1
-                tkns = [seq[: batch_data[i]] for i, seq in enumerate(tkns)]
+            tkns = [t[: batch_data[i]["index"]] for i, t in enumerate(tkns)]
             if self.reverse:
-                return (
-                    self.decode(tkns[:, ::-1]) if not return_tokens else tkns[:, ::-1]
-                )
-            else:
-                return self.decode(tkns) if not return_tokens else tkns
+                tkns = [t[::-1] for t in tkns]
+            return self.decode(tkns) if not return_tokens else tkns
         else:
             batch_data = [
-                {"previous_length": len(prefix), "found": None, "seq": prefix,}
+                {"previous_length": len(prefix), "index": None, "seq": prefix,}
                 for _ in range(self.batch_size)
             ]
             i = 0
-            while i < limit and not all(s["found"] is not None for s in batch_data):
+            while i < limit and not all(s["index"] is not None for s in batch_data):
                 tkns, _ = self.sess.run(
                     self.output,
                     feed_dict={
@@ -368,7 +373,7 @@ class Model:
         print(f"Loading checkpoint {self.ckpt}")
         self.saver.restore(self.sess, self.ckpt)
 
-    def _check_hparams(self, hparams_file):):
+    def _check_hparams(self, hparams_file):
         if hparams_file is not None:
             print(f"Reloading hparams from file {hparams_file}")
             with open(hparams_file) as f:
@@ -410,13 +415,22 @@ class Model:
     # - sampling loop
 
     def _find_token(
-        self, token, tkns, batch_data, exclude_until=True,
+        self, token, tkns, batch_data, chunk_length, exclude_until=True,
     ):
         for i, seq in enumerate(tkns):
-            if not batch_data[i] and token in seq:
-                batch_data[i] = np.where(seq == token)[0][0]
-                if not exclude_until:
-                    batch_data[i] += 1
+            if batch_data[i]["index"] is None:
+                index = token in seq[batch_data[i]["previous_length"] :]
+                if index:
+                    ind = np.where(seq[batch_data[i]["previous_length"] :] == token)[0][
+                        0
+                    ]
+                    batch_data[i]["index"] = batch_data[i]["previous_length"] + ind
+                    if not exclude_until:
+                        batch_data[i]["index"] += 1
+                else:
+                    batch_data[i]["previous_length"] += chunk_length
+                    batch_data[i]["seq"] = seq
+        # print(batch_data)
         return batch_data
 
     def _find_regex(
@@ -424,33 +438,34 @@ class Model:
     ):
         seqs = self.decode(tkns) if not self.reverse else self.decode(tkns[:, ::-1])
         for i, seq in enumerate(seqs):
-            if not batch_data[i]["found"]:
+            if batch_data[i]["index"] is None:
                 if not self.reverse:
-                    found = regex.search(
+                    ind = regex.search(
                         rr, batch_data[i]["seq"][batch_data[i]["previous_length"] :]
                     )
                 else:
-                    found = regex.search(
+                    ind = regex.search(
                         rr, batch_data[i]["seq"][: -batch_data[i]["previous_length"]]
                     )
-                if found:
+                if ind:
                     if not self.reverse:
-                        batch_data[i]["found"] = (
-                            found.span()[0] if exclude_until else found.span()[1]
+                        batch_data[i]["index"] = (
+                            ind.span()[0] if exclude_until else ind.span()[1]
                         )
-                        ind = batch_data[i]["previous_length"] + batch_data[i]["found"]
+                        ind = batch_data[i]["previous_length"] + batch_data[i]["index"]
                         batch_data[i]["seq"] = batch_data[i]["seq"][:ind]
                     else:
-                        batch_data[i]["found"] = (
-                            found.span()[1] if exclude_until else found.span()[0]
+                        batch_data[i]["index"] = (
+                            ind.span()[1] if exclude_until else ind.span()[0]
                         )
                         batch_data[i]["seq"] = batch_data[i]["seq"][
-                            batch_data[i]["found"] :
+                            batch_data[i]["index"] :
                         ]
                 else:
                     # batch_data[i]["length"] = len(seq) # used for debugging
                     batch_data[i]["previous_length"] = len(batch_data[i]["seq"])
                     batch_data[i]["seq"] = seq
+        # print(batch_data)
         return batch_data
 
     def normalize(self, logits, verbose=False):
