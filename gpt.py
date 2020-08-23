@@ -291,7 +291,7 @@ class Model:
         machine-readable subwords.
         """
         if isinstance(s, str):
-            return np.array(self.enc.encode(s))
+            return self.enc.encode(s)
         elif isinstance(s, (list, tuple, np.ndarray)):
             return [self.enc.encode(ss) for ss in s]
 
