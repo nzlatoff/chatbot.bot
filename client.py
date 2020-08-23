@@ -134,7 +134,9 @@ def print_config():
     print()
 
 
-def pprint(msg, width=40, off="", sep="", sp_bf=False, sp_aft=False, und=False):
+def pprint(
+    msg, width=40, off="", sep="", sep_aft="", sp_bf=False, sp_aft=False, und=False
+):
     if sp_bf:
         print()
     if sep:
@@ -144,8 +146,14 @@ def pprint(msg, width=40, off="", sep="", sp_bf=False, sp_aft=False, und=False):
         print(off + "-" * len(msg))
     else:
         print(
-            "\n".join(textwrap.wrap(msg, width=width, initial_indent=off, subsequent_indent=off))
+            "\n".join(
+                textwrap.wrap(
+                    msg, width=width, initial_indent=off, subsequent_indent=off
+                )
+            )
         )
+    if sep_aft:
+        print(off + sep_aft * width)
     if sp_aft:
         print()
 
@@ -188,7 +196,7 @@ def generate(rank_threshold=25):
         prefix_enc = prefix_enc[-max_len:]
         PREFIX = le_model.decode(prefix_enc)
 
-    # add END of answer, store length of PREFIX
+    # add end of answer, store length of prefix
     end_pref = len(PREFIX)
 
     l = le_model.gen(
