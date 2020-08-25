@@ -226,6 +226,64 @@ class Model:
                 i += 1
             return [s["seq"] for s in batch_data]
 
+    def gen_avoiding(
+        self,
+        prefix,
+        avoided_tkn_or_regex,
+        chunk_length=5,
+        temperature=1,
+        top_k=0,
+        top_p=0.0,
+        batch_size=None,
+        limit=100,
+        return_tokens=False,
+        skip_encoding=False,
+    ):
+        self._check_batch_size(batch_size)
+        if self.reverse:
+            pref = self.encode(prefix)[::-1] if not skip_encoding else prefix[::-1]
+        else:
+            pref = self.encode(prefix) if not skip_encoding else prefix
+        context_tkns = self.batch_size * [pref]
+        cond = None
+        i = 0
+        while not cond:
+            tkns, _ = self.sess.run(
+                self.output,
+                feed_dict={
+                    self.length: chunk_length,
+                    self.context: context_tkns,
+                    self.temperature: temperature,
+                    self.top_k: top_k,
+                    self.top_p: top_p,
+                },
+            )
+            temperature += 0.1
+            i += 1
+            if i > limit:
+                break
+            print(tkns)
+            if isinstance(avoided_tkn_or_regex, str):
+                generated = (
+                    [self.decode(t[-chunk_length:]) for t in tkns]
+                    if not self.reverse
+                    else [self.decode(t[-chunk_length:][::-1]) for t in tkns]
+                )
+                if not self.reverse:
+                    cond = all(
+                        not regex.search(avoided_tkn_or_regex, seq) for seq in generated
+                    )
+                else:
+                    cond = all(
+                        not regex.search(avoided_tkn_or_regex, seq) for seq in generated
+                    )
+            else:
+                cond = all(avoided_tkn_or_regex not in t[-chunk_length:] for t in tkns)
+        if self.reverse:
+            return self.decode(tkns[:, ::-1]) if not return_tokens else tkns[:, ::-1]
+        else:
+            return self.decode(tkns) if not return_tokens else tkns
+
     def run(
         self,
         prefix="\n",
