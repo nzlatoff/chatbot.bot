@@ -127,6 +127,28 @@ parser.add_argument(
     help="Character used by the network when answering. Defaults to none.",
 )
 
+parser.add_argument(
+    "--hidden_end_of_line",
+    type=str,
+    default="",
+    help="""Additional text inserted at the end of each received message, before
+    the network produces the next character & answer (can
+    influence the overall theme and stabilise the network). Defaults to
+    nothing.""",
+)
+
+parser.add_argument(
+    "--start_of_line",
+    type=str,
+    default="",
+    help="""Additional text inserted at the start of each produced message,
+    after the character (influences the current answer). If the character is
+    not artificially set as well, this start of line becomes the same as the
+    hidden_end_of_line: the text is added at the end of the received messages,
+    and the network is free to produce any answer (coloured, however, by the
+    context). Defaults to nothing.""",
+)
+
 args = parser.parse_args()
 
 sio = socketio.Client(logger=False, reconnection_delay_max=50)
@@ -221,8 +243,8 @@ def generate_new():
     # pprint("(tkns)", sep="-", sp_bf=True, sp_aft=True)
     # print(TKNS)
 
-    # pprint("(prefix)", sp_bf=True, sp_aft=True)
-    # pprint(le_model.decode(TKNS), sp_aft=True)
+    pprint("(prefix)", sp_bf=True, off="\t\t\t", sp_aft=True)
+    pprint(le_model.decode(TKNS), off="\t\t\t", sp_aft=True)
 
     IS_GENERATING = True
 
@@ -245,7 +267,8 @@ def generate_new():
         skip_encoding=True,
     )
 
-    print(tkns_batch)
+    # print(tkns_batch)
+
     generated = le_model.decode([tkns[END_PREF:] for tkns in tkns_batch])[0].strip()
 
     if generated.find("\n") == -1:
@@ -467,14 +490,39 @@ def on_chat_message(data):
     message = data["message"]
     if character:
         PREFIX = f"{PREFIX}{SEPARATORS}{character}\n{message}{END}"
-        TKNS = np.concatenate((TKNS, le_model.encode(f"{character}\n{message}{SEPARATORS}")))
+        TKNS = np.concatenate((TKNS, le_model.encode(f"{character}\n{message}")))
     else:
         PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
-        TKNS = np.concatenate((TKNS, le_model.encode(f"{message}{SEPARATORS}")))
+        TKNS = np.concatenate((TKNS, le_model.encode(f"{message}")))
+
+    if args.hidden_end_of_line:
+        TKNS = np.concatenate((TKNS, le_model.encode(f"{args.hidden_end_of_line}")))
+
+    if not args.character and args.start_of_line:
+        TKNS = np.concatenate((TKNS, le_model.encode(f"\n{args.start_of_line}")))
+
+    TKNS = np.concatenate((TKNS, le_model.encode(f"{SEPARATORS}")))
 
     END_PREF = len(TKNS)
+
     if args.character:
-        TKNS = np.concatenate((TKNS, le_model.encode(f"{args.character}")))
+        args.character = args.character.strip()
+        TKNS = np.concatenate((TKNS, le_model.encode(f"{args.character}\n")))
+        if args.start_of_line:
+            args.start_of_line = args.start_of_line.strip()
+            TKNS = np.concatenate((TKNS, le_model.encode(f"{args.start_of_line}")))
+            TKNS = le_model.gen_avoiding(
+                TKNS,
+                avoided_tkn_or_regex=le_model.encode("<|e|>"),
+                chunk_length=5,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                top_p=args.top_p,
+                batch_size=args.batch_size,
+                skip_encoding=True,
+                return_tokens=True
+            )[0]
+
 
     # pprint("(after reception, TKNS are now:)", sep="-", sp_bf=True)
     # print(TKNS[0], type(TKNS[0]))
@@ -510,6 +558,8 @@ def send_config():
             "random_threshold": args.random_threshold,
             "rank_threshold": args.rank_threshold,
             "character": args.character,
+            "hidden_end_of_line": args.hidden_end_of_line,
+            "start_of_line": args.start_of_line,
         },
     )
 
