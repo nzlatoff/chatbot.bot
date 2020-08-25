@@ -116,6 +116,7 @@ class Model:
         top_p=0.0,
         batch_size=None,
         return_tokens=False,
+        skip_encoding=False,
     ):
         """
         Higher level generation: input a sentence, get an array with n batches
@@ -123,9 +124,9 @@ class Model:
         """
         self._check_batch_size(batch_size)
         if self.reverse:
-            pref = self.encode(prefix)[::-1]
+            pref = self.encode(prefix)[::-1] if not skip_encoding else prefix[::-1]
         else:
-            pref = self.encode(prefix)
+            pref = self.encode(prefix) if not skip_encoding else prefix
         context_tkns = self.batch_size * [pref]
         tkns, logits = self.sess.run(
             self.output,
