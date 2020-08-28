@@ -481,6 +481,64 @@ class Model:
                     )
                 self.reset(batch_size=batch_size)
 
+    def _check_prefix(self, prefix, batch_size):
+        """
+        Check whether prefix is a string or a list of tokens (for parallel
+        generation). If passing tokens as prefix all sequences must have the
+        same length. This will set the batch size according to either:
+            the parameters given to the function calling this one
+            (gen(), gen_until(), etc.), or
+            the number of prefix token sequences given.
+
+        Parameters:
+        -----------
+            prefix: string or list of lists/np arrays of tokens
+            batch_size: int, setting the batch size for the case where the
+            prefix is a string
+
+        Returns:
+        --------
+            - a dictionary containing:
+                - "prefix": what was passed in, wrapped with an additional
+                batch dimension if need be
+                - "pref": the encoded prefix, equal or not to "prefix"
+                - "context_tkns": the context tokens, a batch of shape (batch_size, n_tokens),
+            ready to be fed to the network
+        """
+        if isinstance(prefix, list):
+            if isinstance(prefix[0], (int, np.integer)):
+                prefix = [prefix]
+            else:
+                it = iter(prefix)  # https://stackoverflow.com/a/35791116
+                l = len(next(it))
+                assert isinstance(prefix[0][0], (int, np.integer)) and all(
+                    len(p) == l for p in it
+                ), """
+                When passing a list as prefix, the following two conditions must be
+                met:
+                    - the list contains tokenized sequences, not strings;
+                    - all tokenized sequences must have the same length.
+                In order to pass several prefixes to the generator,
+                pre-tokenize them with encode()."""
+            self._check_batch_size(len(prefix))
+            if self.reverse:
+                context_tkns = prefix[:, ::-1]
+                pref = context_tkns
+            else:
+                context_tkns = prefix
+                pref = prefix
+        else:
+            self._check_batch_size(batch_size)
+            pref = (
+                self.encode(prefix) if not self.reverse else self.encode(prefix)[::-1]
+            )
+            context_tkns = self.batch_size * [pref]
+        return {
+            "prefix": prefix,
+            "pref": pref,
+            "context_tkns": context_tkns,
+        }
+
     def dummy_run(self):
         """
         A dummy runs forces some libraries to open at the onset of the program,
