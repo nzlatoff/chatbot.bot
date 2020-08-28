@@ -310,21 +310,82 @@ class Model:
         top_k=0,
         top_p=0.0,
         batch_size=None,
-        scores=True,
-        ranks=True,
+        return_perplexities=True,
+        return_ranks=True,
     ):
         """
         Lower level generation: input a sentence, get n batches of generated
         tokens as well as the logits associated with each step.
+
+        Parameters:
+        -----------
+        prefix: string or list of list/np.arrays of tokens. If a string is
+            passed, it will be used as a prefix for all batch_size generated sequences.
+            When passing a list of lists/np.arrays of tokens (encoded text),
+            each generated sequence will have its own prefix, and the number of sequences
+            generated (the batch size) will be adjusted to match the number of
+            given parallel prefixes.
+        length: number of tokens to be generated (not string letters). Default: 5.
+        temperature: float. Used when sampling. A higher temperature flattens the
+            probability curve for the next tokens (things are more random, an unlikely
+            choice has more chances to occur). A lower one means the reverse, the most
+            likely events are even more likely to occur. With a low temperature, the
+            network is more stable (but can end up just repeating itself or being flat);
+            with a high temperature, the network is more 'creative', which can lead to
+            unstable/chaotic outputs.
+        top_k: int. The network samples only from the top_k likeliest tokens
+            at each step. Default: 0 (deactivated).
+        top_p: float, ]0,1]. Nucleus sampling. At each step, the network will sample
+            from the most probable tokens the combined probabilities of which
+            is at most top_p. Default: 0.0 (deactivated).
+        batch_size: int. Batch size, number of sequences produced in
+            parallel. Will be overridden by the number of given sequences if
+            not passing a string as prefix.
+        return_perplexities: boolean. Calculate the scores (logits assigned to
+            tokens at each steps, that can be normalised into probabilities),
+            use them to calculate the perplexities of the produced sequences,
+            and return those as well as a dict with various statistics (min,
+            max, range, mean, std) see self._stats().
+        return_ranks: boolean. Calculate the ranks (ranks of the logits
+            assigned to tokens at each steps: 0 for the most probable, then 1,
+            all the way until n_vocab.), and return those as well as a dict
+            with various statistics (min, max, range, mean, std) see
+            self._stats().
+
+
         Returns:
         --------
-            tokens: machine-readable subwords (from 1 to n_vocab)
-            logits: probabilities for the next token at each step
+        a dictionary containg:
+            tokens: the produced batch of machine-readable subwords
+                    shape: (batch_size, length)
+            logits: the scores for the next token at each step
                     shape: (batch_size, n_tokens - 1, n_vocab)
-            scores: sequence of logits (probs) for each sequence
+            probs: the normalized logits (softmaxed into probabilities)
+                    shape: (batch_size, n_tokens - 1, n_vocab)
+
+            if return_perplexities:
+            -----------------------
+            scores: sequence of logits (scores, unnormalized) for each sequence
                     shape: (batch_size, n_tokens)
             perplexities: the perplexity for each sentence
                     shape: (batch_size, 1)
+            scores_stats: a dict containing:
+                min:  the min, shape: (batch_size, 1)
+                max: the max, shape: (batch_size, 1)
+                range: the range, shape: (batch_size, 1)
+                mean: the mean, shape: (batch_size, 1)
+                std: the standard deviation, shape: (batch_size, 1)
+
+            if return_ranks:
+            ----------------
+            ranks: sequence of ranks for each sequence
+                    shape: (batch_size, n_tokens)
+            ranks_stats: a dict containing:
+                min:  the min, shape: (batch_size, 1)
+                max: the max, shape: (batch_size, 1)
+                range: the range, shape: (batch_size, 1)
+                mean: the mean, shape: (batch_size, 1)
+                std: the standard deviation, shape: (batch_size, 1)
         """
         pref_data = self._check_prefix(prefix, batch_size)
         prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
@@ -340,11 +401,13 @@ class Model:
                 self.top_p: top_p,
             },
         )
+        probs = self.sess.run(tf.nn.softmax(logits, axis=-1))
         data = {
             "tokens": tokens,
             "logits": logits,
+            "probs": probs,
         }
-        if scores or ranks:
+        if return_perplexities or return_ranks:
             # extract scores & calculate perplexities
             seq_len = len(tokens[0]) - 1
             indz = (
@@ -352,14 +415,14 @@ class Model:
                 self.batch_size * (tuple(range(seq_len)),),
                 tuple(tuple(tkn) for tkn in tokens[:, 1:]),
             )
-            scores = logits[indz]
-            perplexities = self._perplexities(scores)
+            scores = probs[indz]
+            perp_data = self._perplexities(scores)
             data.update(
-                {"scores": scores, "perplexities": perplexities,}
+                {"scores": scores, **perp_data,}
             )
-            if ranks:
-                ranks = self._ranks(logits, scores)
-                data["ranks"] = ranks
+            if return_ranks:
+                ranks_data = self._ranks(probs, scores)
+                data.update(**ranks_data)
         return data
 
     # --------------------------------------------------------------------------------
@@ -783,6 +846,7 @@ class Model:
     # --------------------------------------------------------------------------------
     # Perplexity works:
     # -----------------
+    # - _stats: produce stats for a batch of arrays (min/max/range/mean/std)
     # - _perplexities: to be used in combination with the output of run (which
     #                  returns scores
     # - _ranks: returns the ranks of batched sentences, output by run
@@ -790,73 +854,90 @@ class Model:
     # - get_rank: gets rank for one or more existing sentences
     # - get_perplexity: gets perplexity for one or more existing sentences
 
-    def _perplexities(self, scores, mode=None):
+    def _stats(self, arr):
         """
-        Compute the perplexity given a batch of scores (computed by
+        Parameters:
+        -----------
+        arr: an array/tuple/np.array of batch_size arrays/tuples/np.arrays.
+
+        Returns:
+        --------
+        a dictionary of statistics:
+            min:  the min, shape: (batch_size, 1)
+            max: the max, shape: (batch_size, 1)
+            range: the range, shape: (batch_size, 1)
+            mean: the mean, shape: (batch_size, 1)
+            std: the standard deviation, shape: (batch_size, 1)
+        """
+        lemin = np.min(arr, axis=-1, keepdims=True)
+        lemax = np.max(arr, axis=-1, keepdims=True)
+        return {
+            "min": lemin,
+            "max": lemax,
+            "range": lemax - lemin,
+            "mean": np.mean(arr, axis=-1, keepdims=True),
+            "std": np.std(arr, axis=-1, keepdims=True),
+        }
+
+
+    def _perplexities(self, probs):
+        """
+        Compute the perplexity given a batch of probs (computed by
         self.run()).
-        Inputs
-        ------
-            - scores: shape: (batch_size, seq_len - 1)
-            - mode: 'min': returns the minimum score for each sequence.
-                    'mean': returns - mean(scores).
-                    'meanmin': returns the min score - mean(scores).
-                    Defaults to None: returns - mean of 2**log2(exp(scores)).
+
+        Parameters:
+        -----------
+        probs: the softmaxed logits.
+            shape: (batch_size, seq_len - 1)
+
         Returns
         -------
-            - perplexities: shape: (batch_size, 1)
+        a dictionary containing:
+            scores_stats: a dictionary of statistics:
+                min:  the min, shape: (batch_size, 1)
+                max: the max, shape: (batch_size, 1)
+                range: the range, shape: (batch_size, 1)
+                mean: the mean, shape: (batch_size, 1)
+                std: the standard deviation, shape: (batch_size, 1)
+            perplexities: 2 ** mean(log2(probs))
+                shape: (batch_size, 1)
         """
 
-        if mode == "min":
-            perplexities = np.min(scores, axis=-1, keepdims=True)
-        elif mode == "mean":
-            perplexities = -np.mean(scores, axis=-1, keepdims=True)
-        elif mode == "meanmin":
-            perplexities = np.min(scores, axis=-1, keepdims=True) - np.mean(
-                scores, axis=-1, keepdims=True
-            )
-        else:
-            perplexities = 2 ** (
-                -np.mean(np.log2(np.exp(np.nan_to_num(scores))), axis=-1, keepdims=True)
-            )
+        return {
+            "scores_stats": self._stats(probs),
+            "perplexities": 2 ** -np.mean(np.log2(probs), axis=-1, keepdims=True),
+        }
 
-        return perplexities
-
-    def _ranks(self, logits, scores, mode="mean"):
+    def _ranks(self, probs, scores):
         """
         Compute the rank of tokens for a batch of (freshly generated) input seqences(s).
         Note: this assumes equal lengths for sequences.
-        Inputs
-        ------
-            - logits: all logits of the seq batch. (produced by .run())
-            - scores: scores for the seq batch. (produced by .run())
-            - mode: 'min': returns the minimum rank for each sequence.
-                    'max': returns the maximum rank for each sequence.
-                    'mean': returns mean(ranks).
-                    'meanmin': returns the min score - mean(ranks).
-        Returns
-        -------
-            - ranks: rank of each seq, computed according to 'mode'.
-            - tkns_ranks: ranks of each token for the seq batch.
 
+        Parameters
+        ----------
+        probs: all probs of the seq batch. (produced by .run())
+        scores: scores for the seq batch. (produced by .run())
+
+        Returns:
+        --------
+        a dictionary containing:
+            ranks: ranks of each token for the seq batch.
+                shape: (batch_size, n_tokens)
+            ranks_stats: a dictionary of statistics:
+                min:  the min, shape: (batch_size, 1)
+                max: the max, shape: (batch_size, 1)
+                range: the range, shape: (batch_size, 1)
+                mean: the mean, shape: (batch_size, 1)
+                std: the standard deviation, shape: (batch_size, 1)
         """
-        logits_sorted = np.sort(logits)[..., ::-1]  # descending order
-        tkns_ranks = np.where(logits_sorted == scores[..., None])[-1]
+        logits_sorted = np.sort(probs)[..., ::-1]  # descending order
+        ranks = np.where(logits_sorted == scores[..., None])[-1]
         # np.where flattens the results -> reshape to (batch_size, seq_len)
-        tkns_ranks = tkns_ranks.reshape(logits.shape[0], -1)
-        if mode == "min":
-            ranks = np.min(tkns_ranks, axis=-1, keepdims=True)
-        elif mode == "max":
-            ranks = np.max(tkns_ranks, axis=-1, keepdims=True)
-        elif mode == "mean":
-            ranks = np.mean(tkns_ranks, axis=-1, keepdims=True)
-        elif mode == "meanmin":
-            ranks = np.min(tkns_ranks, axis=-1, keepdims=True) - np.mean(
-                tkns_ranks, axis=-1, keepdims=True
-            )
-        else:
-            raise Exception(f"mode {mode} unknown...")
-
-        return ranks, tkns_ranks
+        ranks = ranks.reshape(probs.shape[0], -1)
+        return {
+            "ranks": ranks,
+            "ranks_stats": self._stats(ranks),
+        }
 
     # Two following functions adapted from @gpt2ent:
     # https://github.com/gpt2ent/gpt-2-simple/blob/652fdab80131ce83f8f1b6fd00f597dd48ae2e36/gpt_2_simple/gpt_2.py#L504
@@ -896,12 +977,7 @@ class Model:
         return grouped_tkns
 
     def get_rank(
-        self,
-        sentences=["\n"],
-        mode="mean",
-        return_all_ranks=False,
-        verbose=False,
-        batched=False,
+        self, sentences=["\n"], return_all_ranks=False, verbose=False, batched=False,
     ):
         """
         Compute the rank of tokens for input sentence(s). Note: this assumes
@@ -911,10 +987,6 @@ class Model:
         Inputs
         ------
             - sentences: str or array
-            - mode: 'min': returns the minimum rank for each sequence.
-                    'max': returns the maximum rank for each sequence.
-                    'mean': returns mean(ranks).
-                    'meanmin': returns the min score - mean(ranks).
             - return_all_ranks: if True returns the arrays of ranks for all
                                 steps. Defaults to False.
             - verbose: print the progress made. Defaults to false.
@@ -937,8 +1009,8 @@ class Model:
         count_len = len(str(tot))  # just for formatting purposes
         # assuming varying sequence lengths, just use a plain loop
         # and run each of them through the network
-        seq_ranks = []
-        tkns_ranks = []
+        ranks_stats = []
+        ranks = []
         for i, seq in enumerate(tkns):
             seq_len = len(seq)
             logits = self.get_logits(context_tokens=seq)
@@ -951,27 +1023,17 @@ class Model:
                 [(logits[0, i, token]) for i, token in enumerate(trunc)]
             )
             logits_sorted = np.sort(logits)[..., ::-1]  # descending order
-            ranks = np.where(logits_sorted == scores[..., None])[-1]
-            tkns_ranks.append(ranks)
-            if mode == "min":
-                rank = min(ranks)
-            elif mode == "max":
-                rank = max(ranks)
-            elif mode == "mean":
-                rank = np.mean(ranks)
-            elif mode == "meanmin":
-                rank = min(ranks) - np.mean(ranks)
-            elif mode == "stdev":
-                rank = np.std(ranks)
-            else:
-                raise Exception(f"mode {mode} unknown...")
+            r = np.where(logits_sorted == scores[..., None])[-1]
+            ranks.append(r)
+            data = self._stats(r)
             if verbose:
-                print(f"{i+1:{count_len}}/{tot} | {rank:20.17f} | {sentences[i]}")
-            seq_ranks.append(rank)
+                print(f"{i+1:{count_len}}/{tot} | {sentences[i]}")
+            ranks_stats.append(data)
         print()
-        if return_all_ranks:
-            return np.array(seq_ranks), np.array(tkns_ranks)
-        return np.array(seq_ranks)
+        return {
+            "ranks": ranks,
+            "ranks_stats": ranks_stats,
+        }
 
     def get_perplexity(
         self,
@@ -986,27 +1048,25 @@ class Model:
         unequal lengths for sentences. For freshly neuroned batches of equal
         lengths, use the scores returned by self.run() and pass them to
         _perplexities.
-        Inputs
-        ------
-            - sentences: str or array
-            - mode: 'min': returns the minimum score for each sequence.
-                    'mean': returns - mean(scores).
-                    'meanmin': returns the min score - mean(scores).
-                    Defaults to None: returns - mean of 2**log2(exp(scores)).
-            - return_scores: if True returns the arrays of scores. Defaults to False.
-            - verbose: print the progress made. Defaults to false.
-            - batched: boolean. If False, plain loop, constant batch size of 1,
-                       else, collecting seqences by tokenized length, processing
-                       them batch by batch. (*This is actually slower than the
-                       loop!*)
-        Returns
-        -------
-            - perplexities: array of perplexity score(s).
-                            shape: (n_sentences,)
-            - scores (if verbose): array of scores at each step for each sentence.
-                            shape: (n_sentences, seq_len)
-                                   ! seq_len is the number of tokens after encoding
-        """
+
+        Parameters:
+        -----------
+        sentences: str or array of strings.
+        return_scores: if True returns the arrays of scores. Defaults to False.
+        verbose: print the progress made. Defaults to false.
+        batched: boolean. If False, plain loop, constant batch size of 1,
+           else, collecting seqences by tokenized length, processing
+           them batch by batch. (*This is actually slower than the
+           loop!*)
+
+        Returns:
+        --------
+        perplexities: array of perplexity score(s).
+            shape: (n_sentences,)
+        scores (if verbose): array of scores at each step for each sentence.
+            shape: (n_sentences, seq_len)
+                   ! seq_len is the number of tokens after encoding
+    """
         if verbose:
             msg = "calculating perplexity of existing sentences:"
             print(msg)
@@ -1083,8 +1143,7 @@ class Model:
                             scores = logits[indz]  # .copy()
                             all_scores.extend(s for s in scores)
                             perplexities.extend(
-                                p
-                                for p in self._perplexities(scores, mode=mode).flatten()
+                                p for p in self._perplexities(scores).flatten()
                             )
 
                             gc.collect()
@@ -1102,52 +1161,42 @@ class Model:
                         div = div * 2
                 print()
 
-            if return_scores:
-                return np.array(perplexities), np.array(all_scores)
-            return np.array(perplexities)
+            return {
+                "perplexities": perplexities,
+                "scores": all_scores,
+            }
+
         else:
             tot = len(tkns)
             count_len = len(str(tot))  # just for formatting purposes
             # assuming varying sequence lengths, just use a plain loop
             # and run each of them through the network
+            scores = []
+            scores_stats = []
             perplexities = []
-            all_scores = []
             for i, seq in enumerate(tkns):
                 logits = self.get_logits(context_tokens=seq)
                 # don't take the last one (predicting the token after our sentence)
                 if len(seq) > 1:
                     trunc = seq[1:]
                     logits = logits[:, :-1, :]
-                scores = np.nan_to_num(
-                    [(logits[0, i, token]) for i, token in enumerate(trunc)]
+                probs = self.sess.run(tf.nn.softmax(logits, axis=-1))
+                s = np.nan_to_num(
+                    [(probs[0, i, token]) for i, token in enumerate(trunc)]
                 )
-                all_scores.append(scores)
-                if mode == "min":
-                    perplexity = min(scores)
-                if mode == "mean":
-                    perplexity = -np.mean(scores)
-                if mode == "meanmin":
-                    perplexity = min(scores) - np.mean(scores)
-                else:
-                    perplexity = 2 ** (
-                        -np.mean(
-                            np.log2(np.exp(np.nan_to_num(scores))),
-                            axis=-1,
-                            keepdims=True,
-                        )
-                    )
-
+                scores.append(s)
+                scores_stats.append(self._stats(s))
+                perplexities.append(2 ** -np.mean(np.log2(s), axis=-1, keepdims=True))
                 if verbose:
-                    print(
-                        f"{i+1:{count_len}}/{tot} | {perplexity:20.17f} | {sentences[i]}"
-                    )
+                    print(f"{i+1:{count_len}}/{tot} | {sentences[i]}")
                 else:
                     print(f"({i+1:{count_len}}/{tot})", end="\r")
-                perplexities.append(perplexity)
             print()
-            if return_scores:
-                return np.array(perplexities), np.array(all_scores)
-            return np.array(perplexities)
+            return {
+                "scores": scores,
+                "scores_stats": scores_stats,
+                "perplexities": perplexities,
+            }
 
 
 if __name__ == "__main__":
