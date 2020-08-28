@@ -555,24 +555,6 @@ class Model:
         # print(batch_data)
         return batch_data
 
-    def normalize(self, logits, verbose=False):
-        """
-        Normalize a tensor of logits + softmaxing it.
-        Inputs
-        ------
-            - logits shape: (batch_size, seq_len, n_vocab)
-        Returns
-        -------
-            - logprobs: shape: (batch_size, seq_len, n_vocab)
-        """
-        mu = np.mean(logits, axis=-1, keepdims=True)
-        lm = logits - mu
-        le = np.exp(lm)
-        logprobs = le / np.sum(le, axis=-1, keepdims=True)
-        if verbose:
-            return logprobs, mu, lm, le
-        return logprobs
-
     def top_k_logits(self, logits, k):
         """
         Top K sampling. Selects the k tokens with the max probability for the
