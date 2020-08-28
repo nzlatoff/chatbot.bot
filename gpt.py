@@ -205,14 +205,61 @@ class Model:
         prefix="\n",
         until="<|e|>",
         exclude_until=True,
-        limit=200,
         chunk_length=5,
+        sanity_limit=200,
         temperature=1,
         top_k=0,
         top_p=0.0,
         batch_size=None,
         return_tokens=False,
     ):
+        """
+        Generate sequences until a special token (e.g. "<|endoftext|>") or a
+        regex is found. The resulting sequences will not be of the same length.
+        Beware, when using the string version of until, not to
+        forget to escape regex-like chars (for instance '.' means any
+        character, and '\.' a literal dot). The module used is the `regex`
+        module (not `re`), which is a superset of 're' allowing for Perl/utf-8
+        syntax.
+
+        Parameters:
+        -----------
+        prefix: string or list of list/np.arrays of tokens. If a string is
+            passed, it will be used as a prefix for all batch_size generated sequences.
+            When passing a list of lists/np.arrays of tokens (encoded text),
+            each generated sequence will have its own prefix, and the number of sequences
+            generated (the batch size) will be adjusted to match the number of
+            given parallel prefixes.
+        until: the special token or regex to find. Defaults to '<|e|>'.
+        exclude_until:  boolean. Whether to return the sequences with or without the
+            searched item. Default: True (do not include until).
+        chunk_length: int. Number of tokens to be generated in the loop. Default: 5.
+        sanity_limit: int. Guarantee that the generation loop is interrupted after this
+            number of iterations. Default: 200.
+        temperature: float. Used when sampling. A higher temperature flattens the
+            probability curve for the next tokens (things are more random, an unlikely
+            choice has more chances to occur). A lower one means the reverse, the most
+            likely events are even more likely to occur. With a low temperature, the
+            network is more stable (but can end up just repeating itself or being flat);
+            with a high temperature, the network is more 'creative', which can lead to
+            unstable/chaotic outputs.
+        top_k: int. The network samples only from the top_k likeliest tokens
+            at each step. Default: 0 (deactivated).
+        top_p: float, ]0,1]. Nucleus sampling. At each step, the network will sample
+            from the most probable tokens the combined probabilities of which
+            is at most top_p. Default: 0.0 (deactivated).
+        batch_size: int. Batch size, number of sequences produced in
+            parallel. Will be overridden by the number of given sequences if
+            not passing a string as prefix.
+        return_tokens:
+            boolean. Return tokens instead of decoding them to strings.
+
+        Returns:
+        --------
+        tokens: the generated tokens, including the prefix, decoded or not.
+        """
+
+
         pref_data = self._check_prefix(prefix, batch_size)
         prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
             pref_data
@@ -229,7 +276,9 @@ class Model:
                 for _ in range(self.batch_size)
             ]
             i = 0
-            while i < limit and not all(s["index"] is not None for s in batch_data):
+            while i < sanity_limit and not all(
+                s["index"] is not None for s in batch_data
+            ):
                 tkns, _ = self.sess.run(
                     self.output,
                     feed_dict={
@@ -259,7 +308,9 @@ class Model:
                 for _ in range(self.batch_size)
             ]
             i = 0
-            while i < limit and not all(s["index"] is not None for s in batch_data):
+            while i < sanity_limit and not all(
+                s["index"] is not None for s in batch_data
+            ):
                 tkns, _ = self.sess.run(
                     self.output,
                     feed_dict={
