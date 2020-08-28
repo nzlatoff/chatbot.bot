@@ -92,7 +92,35 @@ class Model:
         print_tokens=False,
     ):
         """
-        Highest level function, simply prints generated texts.
+        Highest level function, simply prints generated texts. Invokes self.gen().
+
+        Parameters:
+        -----------
+        prefix: string or list of list/np.arrays of tokens. If a string is
+            passed, it will be used as a prefix for all batch_size generated sequences.
+            When passing a list of lists/np.arrays of tokens (encoded text),
+            each generated sequence will have its own prefix, and the number of sequences
+            generated (the batch size) will be adjusted to match the number of
+            given parallel prefixes.
+        length: number of tokens to be generated (not string letters). Default: 5.
+        temperature: float. Used when sampling. A higher temperature flattens the
+            probability curve for the next tokens (things are more random, an unlikely
+            choice has more chances to occur). A lower one means the reverse, the most
+            likely events are even more likely to occur. With a low temperature, the
+            network is more stable (but can end up just repeating itself or being flat);
+            with a high temperature, the network is more 'creative', which can lead to
+            unstable/chaotic outputs.
+        top_k: int. The network samples only from the top_k likeliest tokens
+            at each step. Default: 0 (deactivated).
+        top_p: float, ]0,1]. Nucleus sampling. At each step, the network will sample
+            from the most probable tokens the combined probabilities of which
+            is at most top_p. Default: 0.0 (deactivated).
+        batch_size: int. Batch size, number of sequences produced in
+            parallel. Will be overridden by the number of given sequences if
+            not passing a string as prefix.
+        print_tokens:
+            boolean. Print raw tokens instead of decoding them to strings.
+
         """
         for seq in self.gen(
             prefix=prefix,
