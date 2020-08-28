@@ -1,5 +1,6 @@
 from tensorflow.core.protobuf import rewriter_config_pb2
 from collections import defaultdict
+from operator import itemgetter
 import tensorflow as tf
 import numpy as np
 import encoder_hug
@@ -150,13 +151,11 @@ class Model:
         Higher level generation: input a sentence, get an array with n batches
         of continuations.
         """
-        self._check_batch_size(batch_size)
-        if self.reverse:
-            pref = self.encode(prefix)[::-1] if not skip_encoding else prefix[::-1]
-        else:
-            pref = self.encode(prefix) if not skip_encoding else prefix
-        context_tkns = self.batch_size * [pref]
-        tkns, logits = self.sess.run(
+        pref_data = self._check_prefix(prefix, batch_size)
+        prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
+            pref_data
+        )
+        tkns, _ = self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
@@ -183,23 +182,17 @@ class Model:
         top_p=0.0,
         batch_size=None,
         return_tokens=False,
-        skip_encoding=False,
     ):
-        self._check_batch_size(batch_size)
+        pref_data = self._check_prefix(prefix, batch_size)
+        prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
+            pref_data
+        )
         if until in self.special_tokens:
             until = self.encode(until)[0]
             use_regex = False
         else:
             rr = regex.compile(regex.escape(until))
             use_regex = True
-
-        if self.reverse:
-            pref = self.encode(prefix)[::-1] if not skip_encoding else prefix[::-1]
-        else:
-            pref = self.encode(prefix) if not skip_encoding else prefix
-
-        context_tkns = self.batch_size * [pref]
-
         if not use_regex:
             batch_data = [
                 {"previous_length": len(pref), "index": None, "seq": pref,}
@@ -265,14 +258,11 @@ class Model:
         batch_size=None,
         limit=100,
         return_tokens=False,
-        skip_encoding=False,
     ):
-        self._check_batch_size(batch_size)
-        if self.reverse:
-            pref = self.encode(prefix)[::-1] if not skip_encoding else prefix[::-1]
-        else:
-            pref = self.encode(prefix) if not skip_encoding else prefix
-        context_tkns = self.batch_size * [pref]
+        pref_data = self._check_prefix(prefix, batch_size)
+        prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
+            pref_data
+        )
         cond = None
         i = 0
         while not cond:
@@ -336,12 +326,10 @@ class Model:
             perplexities: the perplexity for each sentence
                     shape: (batch_size, 1)
         """
-        self._check_batch_size(batch_size)
-        if self.reverse:
-            pref = self.encode(prefix)[::-1]
-        else:
-            pref = self.encode(prefix)
-        context_tokens = self.batch_size * [pref]
+        pref_data = self._check_prefix(prefix, batch_size)
+        prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
+            pref_data
+        )
         tokens, logits = self.sess.run(
             self.output,
             feed_dict={
