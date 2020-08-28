@@ -145,11 +145,41 @@ class Model:
         top_p=0.0,
         batch_size=None,
         return_tokens=False,
-        skip_encoding=False,
     ):
         """
         Higher level generation: input a sentence, get an array with n batches
         of continuations.
+
+        Parameters:
+        -----------
+        prefix: string or list of list/np.arrays of tokens. If a string is
+            passed, it will be used as a prefix for all batch_size generated sequences.
+            When passing a list of lists/np.arrays of tokens (encoded text),
+            each generated sequence will have its own prefix, and the number of sequences
+            generated (the batch size) will be adjusted to match the number of
+            given parallel prefixes.
+        length: number of tokens to be generated (not string letters). Default: 5.
+        temperature: float. Used when sampling. A higher temperature flattens the
+            probability curve for the next tokens (things are more random, an unlikely
+            choice has more chances to occur). A lower one means the reverse, the most
+            likely events are even more likely to occur. With a low temperature, the
+            network is more stable (but can end up just repeating itself or being flat);
+            with a high temperature, the network is more 'creative', which can lead to
+            unstable/chaotic outputs.
+        top_k: int. The network samples only from the top_k likeliest tokens
+            at each step. Default: 0 (deactivated).
+        top_p: float, ]0,1]. Nucleus sampling. At each step, the network will sample
+            from the most probable tokens the combined probabilities of which
+            is at most top_p. Default: 0.0 (deactivated).
+        batch_size: int. Batch size, number of sequences produced in
+            parallel. Will be overridden by the number of given sequences if
+            not passing a string as prefix.
+        return_tokens:
+            boolean. Return tokens instead of decoding them to strings.
+
+        Returns:
+        --------
+        tokens: the generated tokens, including the prefix, decoded or not.
         """
         pref_data = self._check_prefix(prefix, batch_size)
         prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
