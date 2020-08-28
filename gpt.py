@@ -101,7 +101,7 @@ class Model:
             top_k=top_k,
             top_p=top_p,
             batch_size=batch_size,
-            print_tokens=print_tokens,
+            return_tokens=print_tokens,
         ):
             print("-" * 40)
             print(seq)
