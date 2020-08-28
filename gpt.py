@@ -626,6 +626,10 @@ class Model:
     def reset(
         self, hparams_file=None, device="/GPU:0", batch_size=1, top_k=0.0, top_p=0.0
     ):
+        """
+        Resetting the network (graph, params, batch_size, device).
+        """
+        tf.compat.v1.reset_default_graph()
         self._check_hparams(hparams_file)
         self.batch_size = batch_size
         self.context = tf.compat.v1.placeholder(tf.int32, [self.batch_size, None])
@@ -640,6 +644,9 @@ class Model:
             )
 
     def load_checkpoint(self, path="checkpoint/run1"):
+        """
+        Load a checkpoint manually.
+        """
         self.ckpt = tf.train.latest_checkpoint(path)
         self.saver = tf.compat.v1.train.Saver(allow_empty=True)
         self.sess.run(tf.compat.v1.global_variables_initializer())
@@ -648,6 +655,12 @@ class Model:
         self.saver.restore(self.sess, self.ckpt)
 
     def _check_hparams(self, hparams_file):
+        """
+        Loading params from file if it exists.
+        Parameters:
+        -----------
+            - hparams_file: path to hparams json file.
+        """
         if hparams_file is not None:
             print(f"Reloading hparams from file {hparams_file}")
             with open(hparams_file) as f:
@@ -749,6 +762,14 @@ class Model:
     def _find_token(
         self, token, tkns, batch_data, chunk_length, exclude_until=True,
     ):
+        """
+        Helper function for gen_until(): finds whether the special_token is
+        present in the produced sequences, and returns a dictionary containing
+        the current sequences, the index where the token has been found
+        (including it or not depending on exclude_until, and the
+        previous_length (to search only in the produced bits). This function
+        works on the tokens only.
+        """
         for i, seq in enumerate(tkns):
             if batch_data[i]["index"] is None:
                 index = token in seq[batch_data[i]["previous_length"] :]
@@ -768,6 +789,14 @@ class Model:
     def _find_regex(
         self, rr, tkns, batch_data, exclude_until=True,
     ):
+        """
+        Helper function for gen_until(): finds whether the regex is
+        present in the produced sequences, and returns a dictionary containing
+        the current sequences, the index where the token has been found
+        (including it or not depending on exclude_until, and the
+        previous_length (to search only in the produced bits). This function
+        converts the tokens into strings and then performs regex search.
+        """
         seqs = self.decode(tkns) if not self.reverse else self.decode(tkns[:, ::-1])
         for i, seq in enumerate(seqs):
             if batch_data[i]["index"] is None:
@@ -900,15 +929,31 @@ class Model:
               arguments, loop_vars, will be.
             - loop_vars: the variables passed to the loop (body/cond).
             - back_prop: Nein!
-        Inputs
-        ------
-            - context: machine readable tokens, shape: (batch_size, n_tokens)
-        Returns
-        -------
-            - tokens: machine-readable subwords
-            - all_logits: probabilities for the next token at each step
-                          shape: (batch_size, n_tokens, n_vocab)
-            - all_scores: probabilities at each step for the sampled tokens
+
+        Parameters:
+        -----------
+        length: number of tokens to be generated (not string letters). Default: 5.
+        context: machine readable tokens fed into the network as prefix
+            shape: (batch_size, n_tokens)
+        temperature: float. Used when sampling. A higher temperature flattens the
+            probability curve for the next tokens (things are more random, an unlikely
+            choice has more chances to occur). A lower one means the reverse, the most
+            likely events are even more likely to occur. With a low temperature, the
+            network is more stable (but can end up just repeating itself or being flat);
+            with a high temperature, the network is more 'creative', which can lead to
+            unstable/chaotic outputs.
+        top_k: int. The network samples only from the top_k likeliest tokens
+            at each step. Default: 0 (deactivated).
+        top_p: float, ]0,1]. Nucleus sampling. At each step, the network will sample
+            from the most probable tokens the combined probabilities of which
+            is at most top_p. Default: 0.0 (deactivated).
+
+        Returns:
+        --------
+        tokens: machine-readable subwords
+        all_logits: probabilities for the next token at each step
+                    shape: (batch_size, n_tokens, n_vocab)
+        all_scores: probabilities at each step for the sampled tokens
         """
 
         with tf.name_scope("sample_sequence"):
@@ -1106,6 +1151,7 @@ class Model:
     def group_seqs_by_len(self, tokens):
         def custom_dd():
             return {"n": 0, "seqs": []}
+
         grouped_tkns = defaultdict(custom_dd)
         for seq in tokens:
             grouped_tkns[len(seq)]["n"] += 1
@@ -1337,10 +1383,12 @@ class Model:
 
 if __name__ == "__main__":
     m = Model(batch_size=20)
-    tokens, logits, scores, perplexities = m.run("LE COMTE.", length=200)
-    indz = perplexities[:, 0].argsort()[::-1]  # https://stackoverflow.com/a/2828121
-    sorted_perplexities = perplexities[indz]
-    sorted_seqs = tokens[indz]
+    data = m.run("LE COMTE.", length=200)
+    indz = data["perplexities"][:, 0].argsort()[
+        ::-1
+    ]  # https://stackoverflow.com/a/2828121
+    sorted_perplexities = data["perplexities"][indz]
+    sorted_seqs = data["tokens"][indz]
 
     print("--------------------------------")
     for perp, sentence in zip(sorted_perplexities, m.decode(sorted_seqs)):
