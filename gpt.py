@@ -332,56 +332,111 @@ class Model:
         self,
         prefix,
         avoided_tkn_or_regex,
-        chunk_length=5,
+        length=5,
+        sanity_limit=200,
         temperature=1,
         top_k=0,
         top_p=0.0,
         batch_size=None,
-        limit=100,
         return_tokens=False,
     ):
+        """
+        Generate beginnings of sequences avoiding a certain token. Useful when
+        wanting continuations despite the fact that a likely outcome from the
+        network's perspective is an end token. This function allows to generate
+        beginnings that are guaranteed not to contain this particular special
+        token or regex, and this batch can then be fed to other functions as
+        prefixes.  Beware, when using the string version of
+        avoided_tkn_or_regex, not to forget to escape regex-like chars (for
+        instance '.' means any character, and '\.' a literal dot). The module
+        used is the `regex` module (not `re`), which is a superset of 're'
+        allowing for Perl/utf-8 syntax.
+
+        Parameters:
+        -----------
+        prefix: string or list of list/np.arrays of tokens. If a string is
+            passed, it will be used as a prefix for all batch_size generated sequences.
+            When passing a list of lists/np.arrays of tokens (encoded text),
+            each generated sequence will have its own prefix, and the number of sequences
+            generated (the batch size) will be adjusted to match the number of
+            given parallel prefixes.
+        avoided_tkn_or_regex: the special token or regex to avoid.
+        length: int. Number of tokens to be generated (not string letters). Default: 5.
+        sanity_limit: int. Guarantee that the generation loop is interrupted after this
+            number of iterations. Default: 200.
+        temperature: float. Used when sampling. A higher temperature flattens the
+            probability curve for the next tokens (things are more random, an unlikely
+            choice has more chances to occur). A lower one means the reverse, the most
+            likely events are even more likely to occur. With a low temperature, the
+            network is more stable (but can end up just repeating itself or being flat);
+            with a high temperature, the network is more 'creative', which can lead to
+            unstable/chaotic outputs.
+        top_k: int. The network samples only from the top_k likeliest tokens
+            at each step. Default: 0 (deactivated).
+        top_p: float, ]0,1]. Nucleus sampling. At each step, the network will sample
+            from the most probable tokens the combined probabilities of which
+            is at most top_p. Default: 0.0 (deactivated).
+        batch_size: int. Batch size, number of sequences produced in
+            parallel. Will be overridden by the number of given sequences if
+            not passing a string as prefix.
+        return_tokens:
+            boolean. Return tokens instead of decoding them to strings.
+
+        Returns:
+        --------
+        tokens: the generated tokens, including the prefix, decoded or not.
+        """
+
+
         pref_data = self._check_prefix(prefix, batch_size)
         prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
             pref_data
         )
+        gen_tkns = []
         cond = None
         i = 0
         while not cond:
             tkns, _ = self.sess.run(
                 self.output,
                 feed_dict={
-                    self.length: chunk_length,
+                    self.length: length,
                     self.context: context_tkns,
                     self.temperature: temperature,
                     self.top_k: top_k,
                     self.top_p: top_p,
                 },
             )
-            temperature += 0.1
             i += 1
-            if i > limit:
+            if i > sanity_limit:
                 break
-            print(tkns)
             if isinstance(avoided_tkn_or_regex, str):
                 generated = (
-                    [self.decode(t[-chunk_length:]) for t in tkns]
+                    [self.decode(t[-length:]) for t in tkns]
                     if not self.reverse
-                    else [self.decode(t[-chunk_length:][::-1]) for t in tkns]
+                    else [self.decode(t[-length:][::-1]) for t in tkns]
                 )
-                if not self.reverse:
-                    cond = all(
-                        not regex.search(avoided_tkn_or_regex, seq) for seq in generated
-                    )
-                else:
-                    cond = all(
-                        not regex.search(avoided_tkn_or_regex, seq) for seq in generated
-                    )
+                for i, seq in enumerate(generated):
+                    if not regex.search(avoided_tkn_or_regex, seq):
+                        gen_tkns.append(tkns[i])
+                        if len(gen_tkns) == self.batch_size:
+                            cond = True
+                            break
             else:
-                cond = all(avoided_tkn_or_regex not in t[-chunk_length:] for t in tkns)
+                for t in tkns:
+                    if avoided_tkn_or_regex not in t[-length:]:
+                        gen_tkns.append(t)
+                        if len(gen_tkns) == self.batch_size:
+                            cond = True
+                            break
+            temperature += 0.1
         if self.reverse:
-            return self.decode(tkns[:, ::-1]) if not return_tokens else tkns[:, ::-1]
+            return (
+                self.decode(gen_tkns[:, ::-1])
+                if not return_tokens
+                else gen_tkns[:, ::-1]
+            )
         else:
-            return self.decode(tkns) if not return_tokens else tkns
+            return self.decode(gen_tkns) if not return_tokens else gen_tkns
 
     def run(
         self,
