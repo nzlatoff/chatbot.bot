@@ -1,4 +1,5 @@
 from base64 import b64encode
+from threading import Lock
 from gpt import Model
 import numpy as np
 import socketio
@@ -192,6 +193,8 @@ def pprint(
         print()
 
 
+LeLocle = Lock()
+
 le_model = Model(
     model_name=args.model,
     run_name=args.run_name,
@@ -252,7 +255,8 @@ def generate_new():
     if should_sess_be_reset():
         return
 
-    # END_PREF = len(TKNS)
+    with LeLocle:
+        END_PREF = len(TKNS)
 
     tkns_batch = le_model.gen_until(
         prefix=TKNS,
@@ -309,7 +313,8 @@ def generate_new():
 
     send_message({"character": char, "message": message, "user": args.server_name})
 
-    TKNS = tkns_batch[0]
+    with LeLocle:
+        TKNS = tkns_batch[0]
 
     # else:
     #     pprint("(RANK INSUFFICIENT: NOT ANSWERING)", off="\t", sp_bf=True, sp_aft=True)
@@ -491,28 +496,36 @@ def on_chat_message(data):
     message = data["message"]
     if character:
         PREFIX = f"{PREFIX}{SEPARATORS}{character}\n{message}{END}"
-        TKNS = np.concatenate((TKNS, le_model.encode(f"{character}\n{message}")))
+        with LeLocle:
+            TKNS = np.concatenate((TKNS, le_model.encode(f"{character}\n{message}")))
     else:
         PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
-        TKNS = np.concatenate((TKNS, le_model.encode(f"{message}")))
+        with LeLocle:
+            TKNS = np.concatenate((TKNS, le_model.encode(f"{message}")))
 
     if args.hidden_end_of_line:
-        TKNS = np.concatenate((TKNS, le_model.encode(f"{args.hidden_end_of_line}")))
+        with LeLocle:
+            TKNS = np.concatenate((TKNS, le_model.encode(f"{args.hidden_end_of_line}")))
 
     if not args.character and args.start_of_line:
-        TKNS = np.concatenate((TKNS, le_model.encode(f"\n{args.start_of_line}")))
+        with LeLocle:
+            TKNS = np.concatenate((TKNS, le_model.encode(f"\n{args.start_of_line}")))
 
-    TKNS = np.concatenate((TKNS, le_model.encode(f"{SEPARATORS}")))
+    with LeLocle:
+        TKNS = np.concatenate((TKNS, le_model.encode(f"{SEPARATORS}")))
 
-    END_PREF = len(TKNS)
+    with LeLocle:
+        END_PREF = len(TKNS)
 
     if args.character:
         args.character = args.character.strip()
-        TKNS = np.concatenate((TKNS, le_model.encode(f"{args.character}\n")))
+        with LeLocle:
+            TKNS = np.concatenate((TKNS, le_model.encode(f"{args.character}\n")))
         if args.start_of_line:
             args.start_of_line = args.start_of_line.strip()
-            TKNS = np.concatenate((TKNS, le_model.encode(f"{args.start_of_line}")))
-            TKNS = le_model.gen_avoiding(
+            with LeLocle:
+                TKNS = np.concatenate((TKNS, le_model.encode(f"{args.start_of_line}")))
+            tkns, _ = le_model.gen_avoiding(
                 TKNS,
                 avoided_tkn_or_regex=le_model.encode("<|e|>"),
                 chunk_length=5,
@@ -521,9 +534,10 @@ def on_chat_message(data):
                 top_p=args.top_p,
                 batch_size=args.batch_size,
                 skip_encoding=True,
-                return_tokens=True
-            )[0]
-
+                return_tokens=True,
+            )
+            with LeLocle:
+                TKNS = tkns[0]
 
     # pprint("(after reception, TKNS are now:)", sep="-", sp_bf=True)
     # print(TKNS[0], type(TKNS[0]))
