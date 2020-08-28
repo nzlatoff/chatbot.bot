@@ -195,6 +195,7 @@ def pprint(
 le_model = Model(
     model_name=args.model,
     run_name=args.run_name,
+    batch_size=args.batch_size,
     special_tokens=["<|endoftext|>"]
     if not args.new
     else ["<|s|>", "<|e|>", "<|endoftext|>"],
