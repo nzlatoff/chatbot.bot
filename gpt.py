@@ -184,10 +184,7 @@ class Model:
         --------
         tokens: the generated tokens, including the prefix, decoded or not.
         """
-        pref_data = self._check_prefix(prefix, batch_size)
-        prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
-            pref_data
-        )
+        context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
         tkns, _ = self.sess.run(
             self.output,
             feed_dict={
@@ -262,11 +259,10 @@ class Model:
         tokens: the generated tokens, including the prefix, decoded or not.
         """
 
-
         pref_data = self._check_prefix(prefix, batch_size)
-        prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
-            pref_data
-        )
+        prefix, prefix_enc, context_tkns = itemgetter(
+            "prefix", "prefix_enc", "context_tkns"
+        )(pref_data)
         if until in self.special_tokens:
             until = self.encode(until)[0]
             use_regex = False
@@ -390,11 +386,7 @@ class Model:
         tokens: the generated tokens, including the prefix, decoded or not.
         """
 
-
-        pref_data = self._check_prefix(prefix, batch_size)
-        prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
-            pref_data
-        )
+        context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
         gen_tkns = []
         cond = None
         i = 0
@@ -526,15 +518,12 @@ class Model:
                 mean: the mean, shape: (batch_size, 1)
                 std: the standard deviation, shape: (batch_size, 1)
         """
-        pref_data = self._check_prefix(prefix, batch_size)
-        prefix, pref, context_tkns = itemgetter("prefix", "pref", "context_tkns")(
-            pref_data
-        )
-        tokens, logits = self.sess.run(
+        context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
+        tkns, logits = self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
-                self.context: context_tokens,
+                self.context: context_tkns,
                 self.temperature: temperature,
                 self.top_k: top_k,
                 self.top_p: top_p,
@@ -703,17 +692,40 @@ class Model:
 
         Returns:
         --------
-            - a dictionary containing:
-                - "prefix": what was passed in, wrapped with an additional
-                batch dimension if need be
-                - "pref": the encoded prefix, equal or not to "prefix"
-                - "context_tkns": the context tokens, a batch of shape (batch_size, n_tokens),
-            ready to be fed to the network
+            a dictionary containing:
+                "prefix": the prefix (or batch thereof, if different) as a
+                    list of strings
+                "prefix_enc": the encoded prefix (or batch thereof, if
+                    different)
+                "context_tkns": the context tokens, a batch of shape (batch_size, n_tokens),
+                    ready to be fed to the network
         """
-        if isinstance(prefix, list):
-            if isinstance(prefix[0], (int, np.integer)):
-                prefix = [prefix]
+        if isinstance(prefix, np.ndarray):
+            if isinstance(prefix[0], np.integer):
+                self._check_batch_size(batch_size)
+                prefix_enc = prefix if not self.reverse else prefix_enc[:, ::-1]
+                prefix = self.decode(prefix)
+                context_tkns = self.batch_size * [prefix_enc]
+            elif isinstance(prefix[0], np.ndarray):
+                self._check_batch_size(prefix.shape[0])
+                prefix_enc = prefix if not self.reverse else prefix_enc[:, ::-1]
+                prefix = self.decode(prefix)
+                context_tkns = prefix_enc
             else:
+                raise TypeError(
+                    """
+                    When passing a nd.array as prefix, make sure it contains
+                    either tokens (ints) or sequences of tokens (nd.arrays) of
+                    ints.
+                    """
+                )
+        elif isinstance(prefix, list):
+            if isinstance(prefix[0], int):
+                self._check_batch_size(batch_size)
+                prefix_enc = prefix if not self.reverse else prefix[::-1]
+                prefix = self.decode(prefix)
+                context_tkns = self.batch_size * [prefix_enc]
+            elif isinstance(prefix[0], list):
                 it = iter(prefix)  # https://stackoverflow.com/a/35791116
                 l = len(next(it))
                 assert isinstance(prefix[0][0], (int, np.integer)) and all(
@@ -725,24 +737,31 @@ class Model:
                     - all tokenized sequences must have the same length.
                 In order to pass several prefixes to the generator,
                 pre-tokenize them with encode()."""
-            self._check_batch_size(len(prefix))
-            if self.reverse:
-                context_tkns = prefix[:, ::-1]
-                pref = context_tkns
+                self._check_batch_size(len(prefix))
+                prefix_enc = prefix if not self.reverse else [p[::-1] for p in prefix]
+                prefix = self.decode(prefix)
+                context_tkns = prefix_enc
             else:
-                context_tkns = prefix
-                pref = prefix
+                raise TypeError(
+                    """
+                    The prefix is must be a list of ints, of lists (equal
+                    lengths), or of np.arrays.
+                    """
+                )
         else:
             self._check_batch_size(batch_size)
-            pref = (
+            prefix_enc = (
                 self.encode(prefix) if not self.reverse else self.encode(prefix)[::-1]
             )
-            context_tkns = self.batch_size * [pref]
-        return {
+            prefix = [prefix]
+            context_tkns = self.batch_size * [prefix_enc]
+
+        data = {
             "prefix": prefix,
-            "pref": pref,
+            "prefix_enc": prefix_enc,
             "context_tkns": context_tkns,
         }
+        return data
 
     def dummy_run(self):
         """
