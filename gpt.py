@@ -55,12 +55,15 @@ class Model:
         self.hparams = model.default_hparams()
         with open(f"models/{model_name}/hparams.json") as f:
             self.hparams.override_from_dict(json.load(f))
+        self.hparams.add_hparam("precision", tf.float32)
         self.batch_size = batch_size
-        self.context = tf.compat.v1.placeholder(tf.int32, [self.batch_size, None])
-        self.length = tf.compat.v1.placeholder(tf.int32, ())
-        self.temperature = tf.compat.v1.placeholder(tf.float32, ())
-        self.top_k = tf.compat.v1.placeholder(tf.int32, ())
-        self.top_p = tf.compat.v1.placeholder(tf.float32, ())
+        self.context = tf.compat.v1.placeholder(
+            tf.int32, [self.batch_size, None], name="context"
+        )
+        self.length = tf.compat.v1.placeholder(tf.int32, (), name="length")
+        self.temperature = tf.compat.v1.placeholder(tf.float32, (), name="temperature")
+        self.top_k = tf.compat.v1.placeholder(tf.int32, (), name="top_k")
+        self.top_p = tf.compat.v1.placeholder(tf.float32, (), name="top_p")
         self.reverse = reverse
         # required to load checkpoint
         self.model = model.model(hparams=self.hparams, X=self.context)
@@ -627,12 +630,14 @@ class Model:
         self, hparams_file=None, device="/GPU:0", batch_size=1, top_k=0.0, top_p=0.0
     ):
         """
-        Resetting the network (graph, params, batch_size, device).
+        Resetting the network (params, batch_size, device).
         """
-        tf.compat.v1.reset_default_graph()
         self._check_hparams(hparams_file)
         self.batch_size = batch_size
-        self.context = tf.compat.v1.placeholder(tf.int32, [self.batch_size, None])
+        self.length = tf.compat.v1.placeholder(tf.int32, (), name="length")
+        self.context = tf.compat.v1.placeholder(
+            tf.int32, [self.batch_size, None], name="context"
+        )
         self.model = model.model(hparams=self.hparams, X=self.context)
         with tf.device(device):
             self.output = self.sample(
