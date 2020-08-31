@@ -497,13 +497,13 @@ class Model:
                     shape: (batch_size, length)
             logits: the scores for the next token at each step
                     shape: (batch_size, n_tokens - 1, n_vocab)
-            probs: the normalized logits (softmaxed into probabilities)
-                    shape: (batch_size, n_tokens - 1, n_vocab)
 
-            if return_perplexities:
-            -----------------------
+            if return_perplexities, the dict will also include:
+            ---------------------------------------------------
             scores: sequence of logits (scores, unnormalized) for each sequence
                     shape: (batch_size, n_tokens)
+            probs: the normalized logits (softmaxed into probabilities)
+                    shape: (batch_size, n_tokens - 1, n_vocab)
             perplexities: the perplexity for each sentence
                     shape: (batch_size, 1)
             scores_stats: a dict containing:
@@ -513,8 +513,8 @@ class Model:
                 mean: the mean, shape: (batch_size, 1)
                 std: the standard deviation, shape: (batch_size, 1)
 
-            if return_ranks:
-            ----------------
+            if return_ranks, the dict will include the above and the following:
+            -------------------------------------------------------------------
             ranks: sequence of ranks for each sequence
                     shape: (batch_size, n_tokens)
             ranks_stats: a dict containing:
@@ -535,28 +535,21 @@ class Model:
                 self.top_p: top_p,
             },
         )
-        probs = self.sess.run(tf.nn.softmax(logits, axis=-1))
         data = {
-            "tokens": tokens,
-            "logits": logits,
-            "probs": probs,
+            "sequences": np.array(self.decode(tkns))
+            if not self.reverse
+            else np.array(self.decode(tkns[:, ::-1])),
+            "tokens": tkns if not self.reverse else tkns[:, ::-1],
+            "logits": logits if not self.reverse else logits[:, ::-1],
         }
         if return_perplexities or return_ranks:
-            # extract scores & calculate perplexities
-            seq_len = len(tokens[0]) - 1
-            indz = (
-                tuple(((i,) * seq_len for i in range(self.batch_size))),
-                self.batch_size * (tuple(range(seq_len)),),
-                tuple(tuple(tkn) for tkn in tokens[:, 1:]),
-            )
-            scores = probs[indz]
-            perp_data = self._perplexities(scores)
             data.update(
-                {"scores": scores, **perp_data,}
+                **self._perps_n_ranks(
+                    data,
+                    return_perplexities=return_perplexities,
+                    return_ranks=return_ranks,
+                )
             )
-            if return_ranks:
-                ranks_data = self._ranks(probs, scores)
-                data.update(**ranks_data)
         return data
 
     # --------------------------------------------------------------------------------
@@ -1065,7 +1058,7 @@ class Model:
     # - get_rank: gets rank for one or more existing sentences
     # - get_perplexity: gets perplexity for one or more existing sentences
 
-    def _stats(self, arr):
+    def _stats(self, arr, name=None):
         """
         Parameters:
         -----------
@@ -1080,16 +1073,39 @@ class Model:
             mean: the mean, shape: (batch_size, 1)
             std: the standard deviation, shape: (batch_size, 1)
         """
-        lemin = np.min(arr, axis=-1, keepdims=True)
-        lemax = np.max(arr, axis=-1, keepdims=True)
+        if name and name[-1] != "_":
+            name = f"{name}_"
         return {
-            "min": lemin,
-            "max": lemax,
-            "range": lemax - lemin,
-            "mean": np.mean(arr, axis=-1, keepdims=True),
-            "std": np.std(arr, axis=-1, keepdims=True),
+            f"{name}min": np.min(arr, axis=-1, keepdims=True),
+            f"{name}max": np.max(arr, axis=-1, keepdims=True),
+            f"{name}range": np.ptp(arr, axis=-1, keepdims=True),
+            f"{name}mean": np.mean(arr, axis=-1, keepdims=True),
+            f"{name}std": np.std(arr, axis=-1, keepdims=True),
         }
 
+    def _perps_n_ranks(self, data, return_perplexities=True, return_ranks=True):
+        probs = self.sess.run(tf.nn.softmax(data["logits"], axis=-1))
+        # extract scores & calculate perplexities
+        seq_len = len(data["tokens"][0]) - 1
+        indz = (
+            tuple(((i,) * seq_len for i in range(self.batch_size))),
+            self.batch_size * (tuple(range(seq_len)),),
+            tuple(tuple(tkn) for tkn in data["tokens"][:, 1:]),
+        )
+        scores = probs[indz]
+        if return_perplexities:
+            perp_data = self._perplexities(scores)
+            data.update(
+                {
+                    "probs": probs if not self.reverse else probs[:, ::-1],
+                    "scores": scores if not self.reverse else scores[:, ::-1],
+                    **perp_data,
+                }
+            )
+        if return_ranks:
+            ranks_data = self._ranks(probs, scores)
+            data.update(**ranks_data)
+        return data
 
     def _perplexities(self, probs):
         """
@@ -1115,8 +1131,8 @@ class Model:
         """
 
         return {
-            "scores_stats": self._stats(probs),
             "perplexities": 2 ** -np.mean(np.log2(probs), axis=-1, keepdims=True),
+            **self._stats(probs, name="scores"),
         }
 
     def _ranks(self, probs, scores):
@@ -1147,7 +1163,7 @@ class Model:
         ranks = ranks.reshape(probs.shape[0], -1)
         return {
             "ranks": ranks,
-            "ranks_stats": self._stats(ranks),
+            **self._stats(ranks, name="ranks"),
         }
 
     # Two following functions adapted from @gpt2ent:
