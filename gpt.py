@@ -270,9 +270,10 @@ class Model:
             rr = regex.compile(regex.escape(until))
             use_regex = True
         if not use_regex:
+            length_prefix = len(context_tkns[0])
             batch_data = [
-                {"previous_length": len(pref), "index": None, "seq": pref,}
-                for _ in range(self.batch_size)
+                {"previous_length": length_prefix, "index": None, "seq": p,}
+                for p in context_tkns
             ]
             i = 0
             while i < sanity_limit and not all(
@@ -302,9 +303,14 @@ class Model:
                 tkns = [t[::-1] for t in tkns]
             return self.decode(tkns) if not return_tokens else tkns
         else:
+            seqs = (
+                self.decode(context_tkns)
+                if not self.reverse
+                else self.decode(context_tkns[:, ::-1])
+            )
             batch_data = [
-                {"previous_length": len(prefix), "index": None, "seq": prefix,}
-                for _ in range(self.batch_size)
+                {"previous_length": len(seq), "index": None, "seq": seq,}
+                for seq in seqs
             ]
             i = 0
             while i < sanity_limit and not all(
