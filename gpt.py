@@ -434,10 +434,10 @@ class Model:
             return (
                 self.decode(gen_tkns[:, ::-1])
                 if not return_tokens
-                else gen_tkns[:, ::-1]
+                else np.array(gen_tkns[:, ::-1])
             )
         else:
-            return self.decode(gen_tkns) if not return_tokens else gen_tkns
+            return self.decode(gen_tkns) if not return_tokens else np.array(gen_tkns)
 
     def run(
         self,
