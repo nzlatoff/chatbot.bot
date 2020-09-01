@@ -216,7 +216,6 @@ class Model:
         top_k=0,
         top_p=0.0,
         batch_size=None,
-        return_tokens=False,
     ):
         """
         Generate sequences until a special token (e.g. "<|endoftext|>") or a
@@ -261,7 +260,27 @@ class Model:
 
         Returns:
         --------
-        tokens: the generated tokens, including the prefix, decoded or not.
+        if the searched string is a special token:
+            a dictionary containig:
+                sequences: the decoded generated sequences.
+                tokens: the generated tokens.
+                logits: all the scores for all tokens at each step.
+                logprobs: the normalized logits (after softmax).
+                perplexities: the perplexity for each sentence, shape: (n_sequences, 1)
+                scores: sequence of logits (scores, unnormalized) for each sequence
+                        shape: (batch_size, n_tokens)
+                scores_stats: dictionaries of stats for the logprobs each containing
+                    scores_min:  the min of scores, shape: (batch_size, 1)
+                    scores_max: the max of scores, shape: (batch_size, 1)
+                    scores_range: the range of scores, shape: (batch_size, 1)
+                    scores_mean: the mean of scores, shape: (batch_size, 1)
+                    scores_std: the standard deviation of scores, shape: (batch_size, 1)
+        if the searched string is a regex:
+            a dictionary containing:
+                sequences: the generated sequences found.
+
+        NOTE: as the results differ in length, the return type will be pure
+        Python lists, and not numpy arrays.
         """
 
         pref_data = self._check_prefix(prefix, batch_size)
@@ -284,7 +303,7 @@ class Model:
             while i < sanity_limit and not all(
                 s["index"] is not None for s in batch_data
             ):
-                tkns, _ = self.sess.run(
+                tkns, logits = self.sess.run(
                     self.output,
                     feed_dict={
                         self.length: chunk_length,
@@ -304,9 +323,33 @@ class Model:
                 context_tkns = tkns
                 i += 1
             tkns = [t[: batch_data[i]["index"]] for i, t in enumerate(tkns)]
-            if self.reverse:
-                tkns = [t[::-1] for t in tkns]
-            return self.decode(tkns) if not return_tokens else tkns
+            tkns = tkns if not self.reverse else [t[::-1] for t in tkns]
+            logits = [l[: batch_data[i]["index"]] for i, l in enumerate(logits)]
+            logits = logits if not self.reverse else [l[::-1] for l in logits]
+            logprobs = []
+            perplexities = []
+            scores = []
+            stats = []
+            for lgt, tkn in zip(logits, tkns):
+                print(lgt.shape)
+                lgpr = self.sess.run(tf.nn.softmax(lgt, axis=-1))
+                scrs = np.nan_to_num(
+                    [(lgpr[i, t]) for i, t in enumerate(tkn)]
+                )
+                scores.append(scrs)
+                perps = self._perplexities(scrs)
+                perplexities.append(perps["perplexities"])
+                stats.append({k:v for k,v in perps.items() if k is not "perplexities"})
+                logprobs.append(lgpr)
+            return {
+                "sequences": self.decode(tkns),
+                "tokens": tkns,
+                "logits": logits,
+                "logprobs": logprobs,
+                "scores": scores,
+                "perplexities": np.array(perplexities),
+                "scores_stats": stats,
+            }
         else:
             seqs = (
                 self.decode(context_tkns)
@@ -336,7 +379,9 @@ class Model:
                 )
                 context_tkns = tkns
                 i += 1
-            return [s["seq"] for s in batch_data]
+            return {
+                "sequences": [s["seq"] for s in batch_data],
+            }
 
     def gen_avoiding(
         self,
