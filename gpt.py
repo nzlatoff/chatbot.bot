@@ -1115,32 +1115,30 @@ class Model:
             data.update(**ranks_data)
         return data
 
-    def _perplexities(self, probs):
+    def _perplexities(self, scores):
         """
-        Compute the perplexity given a batch of probs (computed by
+        Compute the perplexity given a batch of scores (computed by
         self.run()).
 
         Parameters:
         -----------
-        probs: the softmaxed logits.
+        scores: the softmaxed logits.
             shape: (batch_size, seq_len - 1)
 
         Returns
         -------
         a dictionary containing:
-            scores_stats: a dictionary of statistics:
-                min:  the min, shape: (batch_size, 1)
-                max: the max, shape: (batch_size, 1)
-                range: the range, shape: (batch_size, 1)
-                mean: the mean, shape: (batch_size, 1)
-                std: the standard deviation, shape: (batch_size, 1)
-            perplexities: 2 ** mean(log2(probs))
-                shape: (batch_size, 1)
+            perplexities: 2 ** mean(log2(scores)), shape: (batch_size, 1)
+            scores_min: the min of scores, shape: (batch_size, 1)
+            scores_max: the max of scores, shape: (batch_size, 1)
+            scores_range: the range of scores, shape: (batch_size, 1)
+            scores_mean: the mean of scores, shape: (batch_size, 1)
+            scores_std: the standard deviation of scores, shape: (batch_size, 1)
         """
 
         return {
-            "perplexities": 2 ** -np.mean(np.log2(probs), axis=-1, keepdims=True),
-            **self._stats(probs, name="scores"),
+            "perplexities": 2 ** -np.mean(np.log2(scores), axis=-1, keepdims=True),
+            **self._stats(scores, name="scores"),
         }
 
     def _ranks(self, probs, scores):
