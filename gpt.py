@@ -1075,6 +1075,8 @@ class Model:
         """
         if name and name[-1] != "_":
             name = f"{name}_"
+        else:
+            name = ""
         return {
             f"{name}min": np.min(arr, axis=-1, keepdims=True),
             f"{name}max": np.max(arr, axis=-1, keepdims=True),
