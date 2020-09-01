@@ -134,7 +134,7 @@ class Model:
             top_p=top_p,
             batch_size=batch_size,
             return_tokens=print_tokens,
-        ):
+        )["sequences"]:
             print("-" * 40)
             print(seq)
         print("-" * 40)
@@ -182,10 +182,13 @@ class Model:
 
         Returns:
         --------
-        tokens: the generated tokens, including the prefix, decoded or not.
+        a dictionary containig:
+            sequences: the decoded generated sequences.
+            tokens: the generated tokens.
+            logits: all the scores for all tokens at each step.
         """
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
-        tkns, _ = self.sess.run(
+        tkns, logits = self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
@@ -195,10 +198,13 @@ class Model:
                 self.top_p: top_p,
             },
         )
-        if self.reverse:
-            return self.decode(tkns[:, ::-1]) if not return_tokens else tkns[:, ::-1]
-        else:
-            return self.decode(tkns) if not return_tokens else tkns
+        return {
+            "sequences": self.decode(tkns)
+            if not self.reverse
+            else self.decode(tkns[:, ::-1]),
+            "tokens": tkns if not self.reverse else tkns[:, ::-1],
+            "logits": logits if not self.reverse else logits[:, ::-1],
+        }
 
     def gen_until(
         self,
