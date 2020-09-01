@@ -1154,14 +1154,12 @@ class Model:
         Returns:
         --------
         a dictionary containing:
-            ranks: ranks of each token for the seq batch.
-                shape: (batch_size, n_tokens)
-            ranks_stats: a dictionary of statistics:
-                min:  the min, shape: (batch_size, 1)
-                max: the max, shape: (batch_size, 1)
-                range: the range, shape: (batch_size, 1)
-                mean: the mean, shape: (batch_size, 1)
-                std: the standard deviation, shape: (batch_size, 1)
+            ranks: ranks of each token for the seq batch, shape: (batch_size, n_tokens)
+            ranks_min:  the min of ranks, shape: (batch_size, 1)
+            ranks_max: the max of ranks, shape: (batch_size, 1)
+            ranks_range: the range of ranks, shape: (batch_size, 1)
+            ranks_mean: the mean of ranks, shape: (batch_size, 1)
+            ranks_std: the standard deviation of ranks, shape: (batch_size, 1)
         """
         logits_sorted = np.sort(probs)[..., ::-1]  # descending order
         ranks = np.where(logits_sorted == scores[..., None])[-1]
