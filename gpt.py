@@ -619,9 +619,9 @@ class Model:
             },
         )
         data = {
-            "sequences": np.array(self.decode(tkns))
+            "sequences": self.decode(tkns)
             if not self.reverse
-            else np.array(self.decode(tkns[:, ::-1])),
+            else self.decode(tkns[:, ::-1]),
             "tokens": tkns if not self.reverse else tkns[:, ::-1],
             "logits": logits if not self.reverse else logits[:, ::-1],
         }
@@ -646,7 +646,7 @@ class Model:
         if isinstance(s, str):
             return self.enc.encode(s)
         elif isinstance(s, (list, tuple, np.ndarray)):
-            return [self.enc.encode(ss) for ss in s]
+            return np.array([self.enc.encode(ss) for ss in s])
 
     def decode(self, s):
         """
@@ -656,7 +656,7 @@ class Model:
         if isinstance(s[0], (int, np.integer)):
             return self.enc.decode(s)
         elif isinstance(s, (list, tuple, np.ndarray)):
-            return [self.enc.decode(ss) for ss in s]
+            return np.array([self.enc.decode(ss) for ss in s])
 
     def pad_sequences(
         self,
@@ -1441,7 +1441,6 @@ class Model:
                 print("scores:")
                 print(scores[i])
                 print()
-        print()
         return {
             "scores": scores,
             "scores_stats": scores_stats,
