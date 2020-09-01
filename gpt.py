@@ -635,6 +635,22 @@ class Model:
             )
         return data
 
+    def print_data(self, data, sort_by="perplexities"):
+        assert sort_by in data, f"! Data keys:\n{data.keys()}"
+        le_sorting_el = data[sort_by]
+        sorted_seqs = data["sequences"][np.argsort(le_sorting_el.flatten())]
+        sorted_stats = np.sort(le_sorting_el.flatten())
+        for i, seq in enumerate(sorted_seqs):
+            print(seq)
+            print()
+            msg = "stats:"
+            sub = "-" * len(msg)
+            print(f"\t\t{msg}")
+            print(f"\t\t{sub}")
+            print(f"\t\t{sort_by}: {sorted_stats[i]}")
+            print()
+            print("-" * 40)
+
     # --------------------------------------------------------------------------------
     # encoder/decoder utils
 
