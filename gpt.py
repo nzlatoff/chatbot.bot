@@ -1272,11 +1272,15 @@ class Model:
             ranks.append(r)
             stats = self._stats(r)
             if verbose:
+                print("-" * 40)
                 print(f"{i+1:{count_len}}/{tot} |")
-                for k,v in stats.items():
-                    print(f"{k}: {v[0]}")
+                print()
                 print("sequence:")
                 print(sequences[i])
+                print()
+                for k,v in stats.items():
+                    print(f"{k}: {v[0]}")
+                print()
                 print("ranks:")
                 print(ranks[i])
                 print()
@@ -1347,12 +1351,16 @@ class Model:
             perp = 2 ** -np.mean(np.log2(s), axis=-1, keepdims=True)
             perplexities.append(perp)
             if verbose:
+                print("-" * 40)
                 print(f"{i+1:{count_len}}/{tot} |")
+                print()
+                print("sequence:")
+                print(sequences[i])
+                print()
                 print(f"perplexity: {perp[0]}")
                 for k,v in stats.items():
                     print(f"{k}: {v[0]}")
-                print("sequence:")
-                print(sequences[i])
+                print()
                 print("scores:")
                 print(scores[i])
                 print()
