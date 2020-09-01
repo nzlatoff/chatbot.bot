@@ -1204,9 +1204,7 @@ class Model:
             grouped_tkns[len(seq)]["seqs"].append(seq)
         return grouped_tkns
 
-    def get_rank(
-        self, sentences=["\n"], return_all_ranks=False, verbose=False, batched=False,
-    ):
+    def get_rank(self, sequences=["\n"], verbose=False):
         """
         Compute the rank of tokens for input sentence(s). Note: this assumes
         unequal lengths for sentences. For freshly neuroned batches of equal
@@ -1214,25 +1212,36 @@ class Model:
         _ranks().
         Inputs
         ------
-            - sentences: str or array
-            - return_all_ranks: if True returns the arrays of ranks for all
-                                steps. Defaults to False.
-            - verbose: print the progress made. Defaults to false.
+        sequences: str, list/np.array of strings, of tokens, of lists/np.arrays
+            of tokens.
+        verbose: print the progress made. Defaults to false.
         Returns
         -------
-            - seq_ranks: array of rank score(s), one per sentence, according to
-                        'mode'. shape: (n_sentences,)
-            - all_tkns_ranks: array of ranks of tokens at each step for each sentence.
-                                shape: (n_sentences, seq_len)
-                                ! seq_len is the number of tokens after encoding
+        a dictionary containing:
+            ranks: list of ranks at each step for each sentence.
+                shape: (n_sequences, seq_len)
+                ! seq_len is the number of tokens after encoding
+            ranks_stats: a dictionary of statistics:
+                min:  the min, shape: (n_sequences, 1)
+                max: the max, shape: (n_sequences, 1)
+                range: the range, shape: (n_sequences, 1)
+                mean: the mean, shape: (n_sequences, 1)
+                std: the standard deviation, shape: (n_sequences, 1)
         """
         if verbose:
             msg = "calculating ranks of existing sentences:"
             print(msg)
             print("-" * len(msg))
-        if isinstance(sentences, str):
-            sentences = [sentences]
-        tkns = self.encode(sentences)
+        if isinstance(sequences, str):
+            sequences = [sequences]
+            tkns = self.encode(sequences)
+        elif isinstance(sequences, (list, np.ndarray)):
+            if isinstance(sequences[0], str):
+                tkns = self.encode(sequences)
+            elif isinstance(sequences[0], (int, np.integer)):
+                tkns = [sequences]
+            elif isinstance(sequences[0], (list, np.ndarray)):
+                tkns = sequences
         tot = len(tkns)
         count_len = len(str(tot))  # just for formatting purposes
         # assuming varying sequence lengths, just use a plain loop
@@ -1253,10 +1262,17 @@ class Model:
             logits_sorted = np.sort(logits)[..., ::-1]  # descending order
             r = np.where(logits_sorted == scores[..., None])[-1]
             ranks.append(r)
-            data = self._stats(r)
+            stats = self._stats(r)
             if verbose:
-                print(f"{i+1:{count_len}}/{tot} | {sentences[i]}")
-            ranks_stats.append(data)
+                print(f"{i+1:{count_len}}/{tot} |")
+                for k,v in stats.items():
+                    print(f"{k}: {v[0]}")
+                print("sequence:")
+                print(sequences[i])
+                print("ranks:")
+                print(ranks[i])
+                print()
+            ranks_stats.append(stats)
         print()
         return {
             "ranks": ranks,
@@ -1265,11 +1281,8 @@ class Model:
 
     def get_perplexity(
         self,
-        sentences=["\n"],
-        mode=None,
-        return_scores=False,
+        sequences=["\n"],
         verbose=False,
-        batched=False,
     ):
         """
         Compute perplexity score(s) for input sentence(s). Note: this assumes
@@ -1279,152 +1292,77 @@ class Model:
 
         Parameters:
         -----------
-        sentences: str or array of strings.
-        return_scores: if True returns the arrays of scores. Defaults to False.
+        sequences: str, list/np.array of strings, of tokens, of lists/np.arrays
+            of tokens.
         verbose: print the progress made. Defaults to false.
-        batched: boolean. If False, plain loop, constant batch size of 1,
-           else, collecting seqences by tokenized length, processing
-           them batch by batch. (*This is actually slower than the
-           loop!*)
 
         Returns:
         --------
-        perplexities: array of perplexity score(s).
-            shape: (n_sentences,)
-        scores (if verbose): array of scores at each step for each sentence.
-            shape: (n_sentences, seq_len)
-                   ! seq_len is the number of tokens after encoding
+        a dictionary containing:
+            scores: list of scores at each step for each sentence.
+                shape: (n_sequences, seq_len)
+                ! seq_len is the number of tokens after encoding
+            scores_stats: a dictionary of statistics:
+                min:  the min, shape: (n_sequences, 1)
+                max: the max, shape: (n_sequences, 1)
+                range: the range, shape: (n_sequences, 1)
+                mean: the mean, shape: (n_sequences, 1)
+                std: the standard deviation, shape: (n_sequences, 1)
+            perplexities: array of perplexity score(s).
+                shape: (n_sequences, 1)
     """
         if verbose:
             msg = "calculating perplexity of existing sentences:"
             print(msg)
             print("-" * len(msg))
-        if isinstance(sentences, str):
-            sentences = [sentences]
-        tkns = self.encode(sentences)
-        if batched:
-            perplexities = []
-            all_scores = []
-            grouped_tkns = self.group_seqs_by_len(tkns)
-            print("sequences grouped as follows:")
-            n_groups = 0
-            for seq_len, data in sorted(grouped_tkns.items(), key=lambda d: d[1]["n"]):
-                n_groups += 1
-                n_seqs = data["n"]
-                print(f" - {n_seqs} sequence(s) of length: {seq_len}.")
-            print()
-
-            print("processing batches:")
-            c = 0
-            count = 0
-            n_gr_str = len(str(n_groups))
-            for seq_len, data in sorted(
-                grouped_tkns.items(), key=lambda d: d[1]["n"], reverse=True
-            ):
-                c += 1
-                seqs = np.array(data["seqs"])
-                n_seqs = data["n"]
-                seq_pr = len(str(seq_len))  # formatting
-
-                # if the seq is longer than one, don't take the last one
-                # (predicting the token after our sentence)
-                if seq_len > 1:
-                    seq_len = seq_len - 1
-
-                # TODO: - better division into chunks
-                #       - use e.g. h5py to store data to disk as it's the RAM not GPU that is the bottleneck
-                all_scores = []
-                div = int(np.ceil(n_seqs / 10))
-                while True:
-                    seqs_chunks = np.array_split(seqs, div, axis=0)
-                    try:
-                        for i, s_chunk in enumerate(seqs_chunks):
-
-                            tmp_n_seqs = len(s_chunk)
-                            logits = self.get_logits(
-                                context_tokens=s_chunk, verbose=False
-                            )
-                            count += tmp_n_seqs
-                            self.clear_line()
-                            if verbose:
-                                print(
-                                    f"{c:>{n_gr_str}}/{n_groups} | "
-                                    + f"processing a batch of {tmp_n_seqs:3} "
-                                    + f"sequence(s) of length: {seq_len:{seq_pr}}. "
-                                    + f"(batch {i+1:2} of {div:2} done, "
-                                    + f"{tmp_n_seqs:2} seq(s)) | total seqs "
-                                    + f"so far: {count}",
-                                    end="\r",
-                                )
-
-                            # shortening as above for seq_len: remove 1st tkn & last logit
-                            if seq_len > 1:
-                                s_chunk = s_chunk[:, 1:]
-                                logits = logits[:, :-1, :]
-
-                            indz = (
-                                tuple(((i,) * seq_len for i in range(tmp_n_seqs))),
-                                tmp_n_seqs * (tuple(range(seq_len)),),
-                                tuple(tuple(tkn) for tkn in s_chunk),
-                            )
-
-                            scores = logits[indz]  # .copy()
-                            all_scores.extend(s for s in scores)
-                            perplexities.extend(
-                                p for p in self._perplexities(scores).flatten()
-                            )
-
-                            gc.collect()
-
-                        break
-                    except KeyboardInterrupt:
-                        print()
-                        print("user aborted, bye.")
-                        exit()
-                    except Exception as e:
-                        print(
-                            f"oopsie, that batch ({n_seqs}/{div} ~= {n_seqs//div} seqs) was too big, dividing it into {div * 2} chunks of {n_seqs//(div * 2)} seqs..."
-                        )
-                        print(e)
-                        div = div * 2
+        if isinstance(sequences, str):
+            sequences = [sequences]
+            tkns = self.encode(sequences)
+        elif isinstance(sequences, (list, np.ndarray)):
+            if isinstance(sequences[0], str):
+                tkns = self.encode(sequences)
+            elif isinstance(sequences[0], (int, np.integer)):
+                tkns = [sequences]
+            elif isinstance(sequences[0], (list, np.ndarray)):
+                tkns = sequences
+        tot = len(tkns)
+        count_len = len(str(tot))  # just for formatting purposes
+        # assuming varying sequence lengths, just use a plain loop
+        # and run each of them through the network
+        scores = []
+        scores_stats = []
+        perplexities = []
+        for i, seq in enumerate(tkns):
+            logits = self.get_logits(context_tokens=seq)
+            # don't take the last one (predicting the token after our sentence)
+            if len(seq) > 1:
+                trunc = seq[1:]
+                logits = logits[:, :-1, :]
+            logprobs = self.sess.run(tf.nn.softmax(logits, axis=-1))
+            s = np.nan_to_num(
+                [(logprobs[0, i, token]) for i, token in enumerate(trunc)]
+            )
+            scores.append(s)
+            stats = self._stats(s)
+            scores_stats.append(stats)
+            perp = 2 ** -np.mean(np.log2(s), axis=-1, keepdims=True)
+            perplexities.append(perp)
+            if verbose:
+                print(f"{i+1:{count_len}}/{tot} |")
+                print(f"perplexity: {perp[0]}")
+                for k,v in stats.items():
+                    print(f"{k}: {v[0]}")
+                print("sequence:")
+                print(sequences[i])
+                print("scores:")
+                print(scores[i])
                 print()
-
-            return {
-                "perplexities": perplexities,
-                "scores": all_scores,
-            }
-
-        else:
-            tot = len(tkns)
-            count_len = len(str(tot))  # just for formatting purposes
-            # assuming varying sequence lengths, just use a plain loop
-            # and run each of them through the network
-            scores = []
-            scores_stats = []
-            perplexities = []
-            for i, seq in enumerate(tkns):
-                logits = self.get_logits(context_tokens=seq)
-                # don't take the last one (predicting the token after our sentence)
-                if len(seq) > 1:
-                    trunc = seq[1:]
-                    logits = logits[:, :-1, :]
-                probs = self.sess.run(tf.nn.softmax(logits, axis=-1))
-                s = np.nan_to_num(
-                    [(probs[0, i, token]) for i, token in enumerate(trunc)]
-                )
-                scores.append(s)
-                scores_stats.append(self._stats(s))
-                perplexities.append(2 ** -np.mean(np.log2(s), axis=-1, keepdims=True))
-                if verbose:
-                    print(f"{i+1:{count_len}}/{tot} | {sentences[i]}")
-                else:
-                    print(f"({i+1:{count_len}}/{tot})", end="\r")
-            print()
-            return {
-                "scores": scores,
-                "scores_stats": scores_stats,
-                "perplexities": perplexities,
-            }
+        print()
+        return {
+            "scores": scores,
+            "scores_stats": scores_stats,
+            "perplexities": np.array(perplexities),
+        }
 
 
 if __name__ == "__main__":
