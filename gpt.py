@@ -593,25 +593,21 @@ class Model:
                     shape: (batch_size, n_tokens)
             probs: the normalized logits (softmaxed into probabilities)
                     shape: (batch_size, n_tokens - 1, n_vocab)
-            perplexities: the perplexity for each sentence
-                    shape: (batch_size, 1)
-            scores_stats: a dict containing:
-                min:  the min, shape: (batch_size, 1)
-                max: the max, shape: (batch_size, 1)
-                range: the range, shape: (batch_size, 1)
-                mean: the mean, shape: (batch_size, 1)
-                std: the standard deviation, shape: (batch_size, 1)
+            perplexities: the perplexity for each sentence, shape: (batch_size, 1)
+            scores_min:  the min of scores, shape: (batch_size, 1)
+            scores_max: the max of scores, shape: (batch_size, 1)
+            scores_range: the range of scores, shape: (batch_size, 1)
+            scores_mean: the mean of scores, shape: (batch_size, 1)
+            scores_std: the standard deviation of scores, shape: (batch_size, 1)
 
             if return_ranks, the dict will include the above and the following:
             -------------------------------------------------------------------
-            ranks: sequence of ranks for each sequence
-                    shape: (batch_size, n_tokens)
-            ranks_stats: a dict containing:
-                min:  the min, shape: (batch_size, 1)
-                max: the max, shape: (batch_size, 1)
-                range: the range, shape: (batch_size, 1)
-                mean: the mean, shape: (batch_size, 1)
-                std: the standard deviation, shape: (batch_size, 1)
+            ranks: sequence of ranks for each sequence, shape: (batch_size, n_tokens)
+            ranks_min: the min of ranks, shape: (batch_size, 1)
+            ranks_max: the max of ranks, shape: (batch_size, 1)
+            ranks_range: the range of ranks, shape: (batch_size, 1)
+            ranks_mean: the mean of ranks, shape: (batch_size, 1)
+            ranks_std: the standard deviation of ranks, shape: (batch_size, 1)
         """
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
         tkns, logits = self.sess.run(
