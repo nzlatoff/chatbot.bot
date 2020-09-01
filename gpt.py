@@ -1208,6 +1208,19 @@ class Model:
             grouped_tkns[len(seq)]["seqs"].append(seq)
         return grouped_tkns
 
+    def seqs_to_tkns(self, sequences):
+        if isinstance(sequences, str):
+            sequences = [sequences]
+            tkns = self.encode(sequences)
+        elif isinstance(sequences, (list, np.ndarray)):
+            if isinstance(sequences[0], str):
+                tkns = self.encode(sequences)
+            elif isinstance(sequences[0], (int, np.integer)):
+                tkns = [sequences]
+            elif isinstance(sequences[0], (list, np.ndarray)):
+                tkns = sequences
+        return tkns
+
     def get_rank(self, sequences=["\n"], verbose=False):
         """
         Compute the rank of tokens for input sentence(s). Note: this assumes
@@ -1236,16 +1249,7 @@ class Model:
             msg = "calculating ranks of existing sentences:"
             print(msg)
             print("-" * len(msg))
-        if isinstance(sequences, str):
-            sequences = [sequences]
-            tkns = self.encode(sequences)
-        elif isinstance(sequences, (list, np.ndarray)):
-            if isinstance(sequences[0], str):
-                tkns = self.encode(sequences)
-            elif isinstance(sequences[0], (int, np.integer)):
-                tkns = [sequences]
-            elif isinstance(sequences[0], (list, np.ndarray)):
-                tkns = sequences
+        tkns = self.seqs_to_tkns(sequences)
         tot = len(tkns)
         count_len = len(str(tot))  # just for formatting purposes
         # assuming varying sequence lengths, just use a plain loop
@@ -1319,16 +1323,7 @@ class Model:
             msg = "calculating perplexity of existing sentences:"
             print(msg)
             print("-" * len(msg))
-        if isinstance(sequences, str):
-            sequences = [sequences]
-            tkns = self.encode(sequences)
-        elif isinstance(sequences, (list, np.ndarray)):
-            if isinstance(sequences[0], str):
-                tkns = self.encode(sequences)
-            elif isinstance(sequences[0], (int, np.integer)):
-                tkns = [sequences]
-            elif isinstance(sequences[0], (list, np.ndarray)):
-                tkns = sequences
+        tkns = self.seqs_to_tkns(sequences)
         tot = len(tkns)
         count_len = len(str(tot))  # just for formatting purposes
         # assuming varying sequence lengths, just use a plain loop
