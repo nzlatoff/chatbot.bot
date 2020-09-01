@@ -147,7 +147,6 @@ class Model:
         top_k=0,
         top_p=0.0,
         batch_size=None,
-        return_tokens=False,
     ):
         """
         Higher level generation: input a sentence, get an array with n batches
