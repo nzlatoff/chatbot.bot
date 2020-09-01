@@ -385,15 +385,14 @@ class Model:
 
     def gen_avoiding(
         self,
-        prefix,
-        avoided_tkn_or_regex,
+        prefix="\n",
+        avoiding="<|e|>",
         length=5,
         sanity_limit=200,
         temperature=1,
         top_k=0,
         top_p=0.0,
         batch_size=None,
-        return_tokens=False,
     ):
         """
         Generate beginnings of sequences avoiding a certain token. Useful when
@@ -402,7 +401,7 @@ class Model:
         beginnings that are guaranteed not to contain this particular special
         token or regex, and this batch can then be fed to other functions as
         prefixes.  Beware, when using the string version of
-        avoided_tkn_or_regex, not to forget to escape regex-like chars (for
+        avoiding, not to forget to escape regex-like chars (for
         instance '.' means any character, and '\.' a literal dot). The module
         used is the `regex` module (not `re`), which is a superset of 're'
         allowing for Perl/utf-8 syntax.
@@ -415,7 +414,7 @@ class Model:
             each generated sequence will have its own prefix, and the number of sequences
             generated (the batch size) will be adjusted to match the number of
             given parallel prefixes.
-        avoided_tkn_or_regex: the special token or regex to avoid.
+        avoiding: the special token or regex to avoid.
         length: int. Number of tokens to be generated (not string letters). Default: 5.
         sanity_limit: int. Guarantee that the generation loop is interrupted after this
             number of iterations. Default: 200.
@@ -439,15 +438,29 @@ class Model:
 
         Returns:
         --------
-        tokens: the generated tokens, including the prefix, decoded or not.
+        a dictionary containig:
+            sequences: the decoded generated sequences.
+            tokens: the generated tokens.
+            logits: all the scores for all tokens at each step.
+            logprobs: the normalized logits (after softmax).
+            perplexities: the perplexity for each sentence, shape: (n_sequences, 1)
+            scores: sequence of logits (scores, unnormalized) for each sequence
+                    shape: (batch_size, n_tokens)
+            scores_stats: dictionaries of stats for the logprobs each containing
+                scores_min:  the min of scores, shape: (batch_size, 1)
+                scores_max: the max of scores, shape: (batch_size, 1)
+                scores_range: the range of scores, shape: (batch_size, 1)
+                scores_mean: the mean of scores, shape: (batch_size, 1)
+                scores_std: the standard deviation of scores, shape: (batch_size, 1)
         """
 
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
         gen_tkns = []
+        gen_logits = []
         cond = None
         i = 0
         while not cond:
-            tkns, _ = self.sess.run(
+            tkns, logits = self.sess.run(
                 self.output,
                 feed_dict={
                     self.length: length,
@@ -460,34 +473,60 @@ class Model:
             i += 1
             if i > sanity_limit:
                 break
-            if isinstance(avoided_tkn_or_regex, str):
+            if isinstance(avoiding, str) and avoiding not in self.special_tokens:
+                # print("searching for regex")
                 generated = (
                     [self.decode(t[-length:]) for t in tkns]
                     if not self.reverse
                     else [self.decode(t[-length:][::-1]) for t in tkns]
                 )
                 for i, seq in enumerate(generated):
-                    if not regex.search(avoided_tkn_or_regex, seq):
+                    if not regex.search(avoiding, seq):
                         gen_tkns.append(tkns[i])
+                        gen_logits.append(logits[i])
                         if len(gen_tkns) == self.batch_size:
                             cond = True
                             break
             else:
-                for t in tkns:
-                    if avoided_tkn_or_regex not in t[-length:]:
+                # print("searching for token")
+                if isinstance(avoiding, str):
+                    avoiding = m.encode(avoiding)[0]
+                for i, t in enumerate(tkns):
+                    if avoiding not in t[-length:]:
                         gen_tkns.append(t)
+                        gen_logits.append(logits[i])
                         if len(gen_tkns) == self.batch_size:
                             cond = True
                             break
             temperature += 0.1
-        if self.reverse:
-            return (
-                self.decode(gen_tkns[:, ::-1])
-                if not return_tokens
-                else np.array(gen_tkns[:, ::-1])
+        gen_tkns = gen_tkns if not self.reverse else [g[::-1] for g in gen_tkns]
+        gen_logits = gen_logits if not self.reverse else [g[::-1] for g in gen_logits]
+        logprobs = []
+        perplexities = []
+        scores = []
+        stats = []
+        for lgt, tkn in zip(gen_logits, gen_tkns):
+            tkn = tkn[1:] if len(tkn) > 1 else tkn
+            lgpr = self.sess.run(tf.nn.softmax(lgt, axis=-1))
+            scrs = np.nan_to_num(
+                [(lgpr[i, t]) for i, t in enumerate(tkn)]
             )
-        else:
-            return self.decode(gen_tkns) if not return_tokens else np.array(gen_tkns)
+            scores.append(scrs)
+            perps = self._perplexities(scrs)
+            perplexities.append(perps["perplexities"])
+            stats.append({k:v for k,v in perps.items() if k is not "perplexities"})
+            logprobs.append(lgt)
+        return {
+            "sequences": self.decode(gen_tkns)
+            if not self.reverse
+            else self.decode(gen_tkns[:, ::-1]),
+            "tokens": gen_tkns,
+            "logits": gen_logits,
+            "logprobs": logprobs,
+            "scores": scores,
+            "perplexities": np.array(perplexities),
+            "scores_stats": stats,
+        }
 
     def run(
         self,
