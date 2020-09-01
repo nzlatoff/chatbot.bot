@@ -269,12 +269,11 @@ class Model:
                 perplexities: the perplexity for each sentence, shape: (n_sequences, 1)
                 scores: sequence of logits (scores, unnormalized) for each sequence
                         shape: (batch_size, n_tokens)
-                scores_stats: dictionaries of stats for the logprobs each containing
-                    scores_min:  the min of scores, shape: (batch_size, 1)
-                    scores_max: the max of scores, shape: (batch_size, 1)
-                    scores_range: the range of scores, shape: (batch_size, 1)
-                    scores_mean: the mean of scores, shape: (batch_size, 1)
-                    scores_std: the standard deviation of scores, shape: (batch_size, 1)
+                scores_min:  the min of scores, shape: (batch_size, 1)
+                scores_max: the max of scores, shape: (batch_size, 1)
+                scores_range: the range of scores, shape: (batch_size, 1)
+                scores_mean: the mean of scores, shape: (batch_size, 1)
+                scores_std: the standard deviation of scores, shape: (batch_size, 1)
         if the searched string is a regex:
             a dictionary containing:
                 sequences: the generated sequences found.
@@ -331,7 +330,6 @@ class Model:
             scores = []
             stats = []
             for lgt, tkn in zip(logits, tkns):
-                print(lgt.shape)
                 lgpr = self.sess.run(tf.nn.softmax(lgt, axis=-1))
                 scrs = np.nan_to_num(
                     [(lgpr[i, t]) for i, t in enumerate(tkn)]
@@ -341,6 +339,7 @@ class Model:
                 perplexities.append(perps["perplexities"])
                 stats.append({k:v for k,v in perps.items() if k is not "perplexities"})
                 logprobs.append(lgpr)
+
             return {
                 "sequences": self.decode(tkns),
                 "tokens": tkns,
@@ -348,7 +347,7 @@ class Model:
                 "logprobs": logprobs,
                 "scores": scores,
                 "perplexities": np.array(perplexities),
-                "scores_stats": stats,
+                **{k: np.stack([st[k] for st in stats]) for k in stats[0].keys()},
             }
         else:
             seqs = (
@@ -446,12 +445,11 @@ class Model:
             perplexities: the perplexity for each sentence, shape: (n_sequences, 1)
             scores: sequence of logits (scores, unnormalized) for each sequence
                     shape: (batch_size, n_tokens)
-            scores_stats: dictionaries of stats for the logprobs each containing
-                scores_min:  the min of scores, shape: (batch_size, 1)
-                scores_max: the max of scores, shape: (batch_size, 1)
-                scores_range: the range of scores, shape: (batch_size, 1)
-                scores_mean: the mean of scores, shape: (batch_size, 1)
-                scores_std: the standard deviation of scores, shape: (batch_size, 1)
+            scores_min:  the min of scores, shape: (batch_size, 1)
+            scores_max: the max of scores, shape: (batch_size, 1)
+            scores_range: the range of scores, shape: (batch_size, 1)
+            scores_mean: the mean of scores, shape: (batch_size, 1)
+            scores_std: the standard deviation of scores, shape: (batch_size, 1)
         """
 
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
@@ -525,7 +523,7 @@ class Model:
             "logprobs": logprobs,
             "scores": scores,
             "perplexities": np.array(perplexities),
-            "scores_stats": stats,
+            **{k: np.stack([st[k] for st in stats]) for k in stats[0].keys()},
         }
 
     def run(
