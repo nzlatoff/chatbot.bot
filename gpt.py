@@ -1092,7 +1092,7 @@ class Model:
         }
 
     def _perps_n_ranks(self, data, return_perplexities=True, return_ranks=True):
-        probs = self.sess.run(tf.nn.softmax(data["logits"], axis=-1))
+        logprobs = self.sess.run(tf.nn.softmax(data["logits"], axis=-1))
         # extract scores & calculate perplexities
         seq_len = len(data["tokens"][0]) - 1
         indz = (
@@ -1100,18 +1100,18 @@ class Model:
             self.batch_size * (tuple(range(seq_len)),),
             tuple(tuple(tkn) for tkn in data["tokens"][:, 1:]),
         )
-        scores = probs[indz]
+        scores = logprobs[indz]
         if return_perplexities:
             perp_data = self._perplexities(scores)
             data.update(
                 {
-                    "probs": probs if not self.reverse else probs[:, ::-1],
+                    "logprobs": logprobs if not self.reverse else logprobs[:, ::-1],
                     "scores": scores if not self.reverse else scores[:, ::-1],
                     **perp_data,
                 }
             )
         if return_ranks:
-            ranks_data = self._ranks(probs, scores)
+            ranks_data = self._ranks(logprobs, scores)
             data.update(**ranks_data)
         return data
 
