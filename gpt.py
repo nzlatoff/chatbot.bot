@@ -1334,12 +1334,11 @@ class Model:
             ranks: list of ranks at each step for each sentence.
                 shape: (n_sequences, seq_len)
                 ! seq_len is the number of tokens after encoding
-            ranks_stats: a dictionary of statistics:
-                min:  the min, shape: (n_sequences, 1)
-                max: the max, shape: (n_sequences, 1)
-                range: the range, shape: (n_sequences, 1)
-                mean: the mean, shape: (n_sequences, 1)
-                std: the standard deviation, shape: (n_sequences, 1)
+            ranks_min:  the min of ranks, shape: (n_sequences, 1)
+            ranks_max: the max of ranks, shape: (n_sequences, 1)
+            ranks_range: the range of ranks, shape: (n_sequences, 1)
+            ranks_mean: the mean of ranks, shape: (n_sequences, 1)
+            ranks_std: the standard deviation of ranks, shape: (n_sequences, 1)
         """
         if verbose:
             msg = "calculating ranks of existing sentences:"
@@ -1366,7 +1365,7 @@ class Model:
             logits_sorted = np.sort(logits)[..., ::-1]  # descending order
             r = np.where(logits_sorted == scores[..., None])[-1]
             ranks.append(r)
-            stats = self._stats(r)
+            stats = self._stats(r, name="ranks")
             if verbose:
                 print("-" * 40)
                 print(f"{i+1:{count_len}}/{tot} |")
@@ -1384,7 +1383,7 @@ class Model:
         print()
         return {
             "ranks": ranks,
-            "ranks_stats": ranks_stats,
+            **{k: np.stack([st[k] for st in ranks_stats]) for k in ranks_stats[0].keys()},
         }
 
     def get_perplexity(
@@ -1410,14 +1409,13 @@ class Model:
             scores: list of scores at each step for each sentence.
                 shape: (n_sequences, seq_len)
                 ! seq_len is the number of tokens after encoding
-            scores_stats: a dictionary of statistics:
-                min:  the min, shape: (n_sequences, 1)
-                max: the max, shape: (n_sequences, 1)
-                range: the range, shape: (n_sequences, 1)
-                mean: the mean, shape: (n_sequences, 1)
-                std: the standard deviation, shape: (n_sequences, 1)
             perplexities: array of perplexity score(s).
                 shape: (n_sequences, 1)
+            scores_min:  the min of scores, shape: (n_sequences, 1)
+            scores_max: the max of scores, shape: (n_sequences, 1)
+            scores_range: the range of scores, shape: (n_sequences, 1)
+            scores_mean: the mean of scores, shape: (n_sequences, 1)
+            scores_std: the standard deviation of scores, shape: (n_sequences, 1)
     """
         if verbose:
             msg = "calculating perplexity of existing sentences:"
@@ -1442,7 +1440,7 @@ class Model:
                 [(logprobs[0, i, token]) for i, token in enumerate(trunc)]
             )
             scores.append(s)
-            stats = self._stats(s)
+            stats = self._stats(s, name="scores")
             scores_stats.append(stats)
             perp = 2 ** -np.mean(np.log2(s), axis=-1, keepdims=True)
             perplexities.append(perp)
@@ -1462,7 +1460,7 @@ class Model:
                 print()
         return {
             "scores": scores,
-            "scores_stats": scores_stats,
+            **{k: np.stack([st[k] for st in scores_stats]) for k in scores_stats[0].keys()},
             "perplexities": np.array(perplexities),
         }
 
