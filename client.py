@@ -51,6 +51,10 @@ parser.add_argument(
 parser.add_argument("--new", action="store_true", help="Use the new generate function.")
 
 parser.add_argument(
+    "--agent", action="store_true", help="""Make the bot generate text autonomously""",
+)
+
+parser.add_argument(
     "--batch_size",
     type=int,
     default=1,
@@ -200,7 +204,7 @@ le_model = Model(
     run_name=args.run_name,
     batch_size=args.batch_size,
     special_tokens=["<|endoftext|>"]
-    if not args.new
+    if not (args.new or args.agent)
     else ["<|s|>", "<|e|>", "<|endoftext|>"],
 )
 
@@ -492,9 +496,16 @@ def should_sess_be_reset():
 
 @sio.event
 def connect():
+    global TKNS
     print("connection established")
     print("-" * 40)
     sio.emit("new bot", args.server_name)
+    if args.agent:
+        with LeLocle:
+            TKNS = le_model.encode("\n<|e|>\n<|s|>\n")
+        while True:
+            generate_new()
+            time.sleep(10)
 
 
 @sio.event
@@ -575,6 +586,8 @@ def on_chat_message(data):
             pprint("(random is bountiful, let's generate)", off="\t", sp_aft=True)
             if args.new:
                 generate_new()
+            elif args.agent:
+                pass
             else:
                 generate()
     else:
