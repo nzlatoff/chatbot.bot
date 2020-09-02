@@ -64,6 +64,8 @@ class Model:
         self.temperature = tf.compat.v1.placeholder(tf.float32, (), name="temperature")
         self.top_k = tf.compat.v1.placeholder(tf.int32, (), name="top_k")
         self.top_p = tf.compat.v1.placeholder(tf.float32, (), name="top_p")
+        self.lgt = tf.compat.v1.placeholder(tf.float32, [None, len(self.encoder)], name="lgt")
+        self.softmax = tf.nn.softmax(self.lgt, axis=-1, name="final_softmax")
         self.reverse = reverse
         # required to load checkpoint
         self.model = model.model(hparams=self.hparams, X=self.context)
@@ -330,7 +332,8 @@ class Model:
             scores = []
             stats = []
             for lgt, tkn in zip(logits, tkns):
-                lgpr = self.sess.run(tf.nn.softmax(lgt, axis=-1))
+                lgpr = self.sess.run(self.softmax, feed_dict={ self.lgt: lgt})
+                tkn = tkn[1:] if len(tkn) > 1 else tkn
                 scrs = np.nan_to_num(
                     [(lgpr[i, t]) for i, t in enumerate(tkn)]
                 )
@@ -505,7 +508,7 @@ class Model:
         stats = []
         for lgt, tkn in zip(gen_logits, gen_tkns):
             tkn = tkn[1:] if len(tkn) > 1 else tkn
-            lgpr = self.sess.run(tf.nn.softmax(lgt, axis=-1))
+            lgpr = self.sess.run(self.softmax, feed_dict={self.lgt: lgt})
             scrs = np.nan_to_num(
                 [(lgpr[i, t]) for i, t in enumerate(tkn)]
             )
@@ -513,15 +516,15 @@ class Model:
             perps = self._perplexities(scrs)
             perplexities.append(perps["perplexities"])
             stats.append({k:v for k,v in perps.items() if k is not "perplexities"})
-            logprobs.append(lgt)
+            logprobs.append(lgpr)
         return {
             "sequences": self.decode(gen_tkns)
             if not self.reverse
             else self.decode(gen_tkns[:, ::-1]),
-            "tokens": gen_tkns,
-            "logits": gen_logits,
-            "logprobs": logprobs,
-            "scores": scores,
+            "tokens": np.array(gen_tkns),
+            "logits": np.array(gen_logits),
+            "logprobs": np.array(logprobs),
+            "scores": np.array(scores),
             "perplexities": np.array(perplexities),
             **{k: np.stack([st[k] for st in stats]) for k in stats[0].keys()},
         }
