@@ -416,7 +416,7 @@ def generate():
         top_p=args.top_p,
         top_k=args.top_k,
         length=args.length_desired,
-    )[0]
+    )["sequences"][0]
     generated = l[end_pref:]
 
     pprint("(raw)", off="\t\t\t", sep="-", sp_bf=True, sp_aft=True)
@@ -446,9 +446,9 @@ def generate():
         prefix_repl = f"{PREFIX} \u001b[31m|\u001b[0m {r.group(0)}"
         pprint(prefix_repl, off="\t")
 
-        prefix_rank = le_model.get_rank(PREFIX)[0]
-        prefix_repl_rank = le_model.get_rank(prefix_repl)[0]
-        le_rank = le_model.get_rank(repl)[0]
+        prefix_rank = le_model.get_rank(PREFIX)["ranks_mean"][0]
+        prefix_repl_rank = le_model.get_rank(prefix_repl)["ranks_mean"][0]
+        le_rank = le_model.get_rank(repl)["ranks_mean"][0]
 
         pprint(f"(prefix rank: {prefix_rank})", off="\t")
         pprint(f"(prefix & repl rank: {prefix_repl_rank})", off="\t")
