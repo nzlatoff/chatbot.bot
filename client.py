@@ -288,24 +288,25 @@ def generate_new():
                     (TKNS, after_char_encoded)
                 )
             end_pref_after_injections += len(after_char_encoded)
-            data = le_model.gen_avoiding(
-                TKNS,
-                avoiding=le_model.encode("<|e|>"),
-                length=10,
-                temperature=args.temperature,
-                top_k=args.top_k,
-                top_p=args.top_p,
-                batch_size=args.batch_size,
-            )
-            tkns_batch = data["tokens"]
 
-            pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
-            for i, seq in enumerate(data["sequences"]):
-                pprint(seq, off="\t\t")
-                pprint(f"| {data['perplexities'][i].item()} (perp)", off="\t\t", sep_aft="*")
+    data = le_model.gen_avoiding(
+        TKNS,
+        avoiding=le_model.encode("<|e|>"),
+        length=10,
+        temperature=args.temperature,
+        top_k=args.top_k,
+        top_p=args.top_p,
+        batch_size=args.batch_size,
+    )
+    tkns_batch = data["tokens"]
 
-            with LeLocle:
-                TKNS = tkns_batch
+    pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+    for i, seq in enumerate(data["sequences"]):
+        pprint(seq, off="\t\t")
+        pprint(f"| {data['perplexities'][i].item()} (perp)", off="\t\t", sep_aft="*")
+
+    with LeLocle:
+        TKNS = tkns_batch
 
     data = le_model.gen_until(
         prefix=TKNS,
@@ -353,11 +354,17 @@ def generate_new():
 
         pprint(char, off="\t")
         pprint(message, off="\t")
-        pprint(f"| perp: {data['perplexities'][i].item()}", off="\t", sep_aft="*")
+        pprint(f"{data['perplexities'][i].item()} (perp)", off="\t", sep_aft="*")
 
         chars.append(char)
         messages.append(message)
 
+    send_batch({
+        "id": sio.sid,
+        "chars": chars,
+        "messages": messages,
+        "perplexities": data["perplexities"].tolist(),
+    })
 
     min_ind = np.argmin(data["perplexities"])
     char = chars[min_ind]
@@ -639,6 +646,8 @@ def set_config(data):
 def send_typing(data):
     sio.emit("typing", data)
 
+def send_batch(data):
+    sio.emit("chat batch", data)
 
 def send_message(data):
     # print("-"*40)
