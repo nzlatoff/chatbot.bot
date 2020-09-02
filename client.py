@@ -129,7 +129,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--hidden_end_of_line",
+    "--hidden_before_char",
     type=str,
     default="",
     help="""Additional text inserted at the end of each received message, before
@@ -139,13 +139,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--start_of_line",
+    "--hidden_after_char",
     type=str,
     default="",
     help="""Additional text inserted at the start of each produced message,
     after the character (influences the current answer). If the character is
     not artificially set as well, this start of line becomes the same as the
-    hidden_end_of_line: the text is added at the end of the received messages,
+    hidden_before_char: the text is added at the end of the received messages,
     and the network is free to produce any answer (coloured, however, by the
     context). Defaults to nothing.""",
 )
@@ -216,7 +216,6 @@ MESSAGES = []
 PREFIX = ""
 
 TKNS = np.array([], dtype=np.int32)
-END_PREF = 0
 
 print_config()
 
@@ -241,7 +240,6 @@ def fancy_typing(char, message):
 def generate_new():
 
     global IS_GENERATING
-    global END_PREF
     global TKNS
 
     # pprint("(tkns)", sep="-", sp_bf=True, sp_aft=True)
@@ -255,56 +253,115 @@ def generate_new():
     if should_sess_be_reset():
         return
 
-    with LeLocle:
-        END_PREF = len(TKNS)
+    # character & other injections
+    if args.hidden_before_char:
+        args.hidden_before_ch = args.hidden_before_char.strip()
+        with LeLocle:
+            TKNS = np.concatenate(
+                (TKNS, le_model.encode(f"{args.hidden_before_char}\n"))
+            )
 
-    tkns_batch = le_model.gen_until(
+    if not args.character and args.hidden_after_char:
+        args.hidden_after_char = args.hidden_after_char.strip()
+        with LeLocle:
+            TKNS = np.concatenate(
+                (TKNS, le_model.encode(f"{args.hidden_after_char}\n"))
+            )
+
+    end_pref = len(TKNS)
+
+    if args.character:
+        args.character = args.character.strip()
+        char_encoded = le_model.encode(f"{args.character}\n")
+        with LeLocle:
+            TKNS = np.concatenate((TKNS, char_encoded))
+        end_pref_after_injections = end_pref + len(char_encoded)
+        if args.hidden_after_char:
+            args.hidden_after_char = args.hidden_after_char.strip()
+            after_char_encoded = le_model.encode(f"{args.hidden_after_char}")
+            with LeLocle:
+                TKNS = np.concatenate(
+                    (TKNS, after_char_encoded)
+                )
+            end_pref_after_injections += len(after_char_encoded)
+            data = le_model.gen_avoiding(
+                TKNS,
+                avoiding=le_model.encode("<|e|>"),
+                length=10,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                top_p=args.top_p,
+                batch_size=args.batch_size,
+            )
+            tkns_batch = data["tokens"]
+
+            pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+            for i, seq in enumerate(data["sequences"]):
+                pprint(seq, off="\t\t")
+                pprint(f"| {data['perplexities'][i].item()} (perp)", off="\t\t", sep_aft="*")
+
+            with LeLocle:
+                TKNS = tkns_batch
+
+    data = le_model.gen_until(
         prefix=TKNS,
         until="<|s|>",
         exclude_until=False,
-        limit=300,
+        sanity_limit=300,
         chunk_length=5,
         temperature=args.temperature,
         top_p=args.top_p,
         top_k=args.top_k,
         batch_size=args.batch_size,
-        return_tokens=True,
-        skip_encoding=True,
     )
+    tkns_batch = data["tokens"]
 
-    # print(tkns_batch)
+    # pprint("(generated: with hidden)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+    # for i, seq in enumerate(data["sequences"]):
+    #     pprint(seq, off="\t\t")
+    #     pprint(f"| {data['perplexities'][i].item()} (perp)", off="\t\t", sep_aft="*")
 
-    generated = le_model.decode([tkns[END_PREF:] for tkns in tkns_batch])[0].strip()
-
-    if generated.find("\n") == -1:
-        char = ""
-        message = generated
+    if args.character:
+        generated = []
+        for tkns in tkns_batch:
+            tmp_seq = le_model.decode(
+                np.concatenate((char_encoded, tkns[end_pref_after_injections:]))
+            )
+            tmp_seq = tmp_seq.strip()
+            generated.append(tmp_seq)
     else:
-        char = generated[: generated.find("\n")]
-        message = generated[generated.find("\n") + 1 :]
+        generated = [
+            seq.strip()
+            for seq in le_model.decode([tkns[end_pref:] for tkns in tkns_batch])
+        ]
 
-    pprint("(generated)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
-    pprint(generated, off="\t\t")
-    # [pprint(g, off="\t\t", sep_aft="*", sp_aft=True) for g in generated]
+    pprint("(generated)", off="\t", sep="-", sp_bf=True, sp_aft=True)
 
-    pprint("(char)", off="\t", sep="-", sp_bf=True, sp_aft=True)
-    pprint(char, off="\t", sp_aft=True)
-    pprint("(message)", off="\t", sp_aft=True)
-    pprint(message, off="\t")
+    chars = []
+    messages = []
+    for i, g in enumerate(generated):
+        if g.find("\n") == -1:
+            char = ""
+            message = g
+        else:
+            char = g[: g.find("\n")]
+            message = g[g.find("\n") + 1 :].strip()
 
-    # prefix_rank = le_model.get_rank(PREFIX)[0]
-    # prefix_repl_rank = le_model.get_rank(prefix_repl)[0]
-    # le_rank = le_model.get_rank(repl)[0]
+        pprint(char, off="\t")
+        pprint(message, off="\t")
+        pprint(f"| perp: {data['perplexities'][i].item()}", off="\t", sep_aft="*")
 
-    # pprint(f"(prefix rank: {prefix_rank})", off="\t")
-    # pprint(f"(prefix & repl rank: {prefix_repl_rank})", off="\t")
-    # pprint(f"(rank: {le_rank})", off="\t")
+        chars.append(char)
+        messages.append(message)
 
-    # if le_rank < args.rank_threshold:
 
-    pprint("(sent)", sep="-", sp_bf=True, sp_aft=True)
+    min_ind = np.argmin(data["perplexities"])
+    char = chars[min_ind]
+    message = messages[min_ind]
+    pprint("(sent)", sep="-", sp_bf=True)
     pprint(char)
     pprint(message)
+    pprint(f"| {np.min(data['perplexities'])} (perp)")
 
     fancy_typing(char, message)
 
@@ -458,6 +515,7 @@ def reset_session():
     global RESETTING_SESSION
     global MESSAGES
     global PREFIX
+    global TKNS
 
     print()
     print("=" * 40)
@@ -466,6 +524,7 @@ def reset_session():
 
     MESSAGES = []
     PREFIX = ""
+    TKNS = np.array([], dtype=np.int32)
     if IS_GENERATING:
         RESETTING_SESSION = True
     else:
@@ -477,7 +536,6 @@ def reset_session():
 def on_chat_message(data):
 
     global IS_GENERATING
-    global END_PREF
     global MESSAGES
     global PREFIX
     global TKNS
@@ -503,41 +561,8 @@ def on_chat_message(data):
         with LeLocle:
             TKNS = np.concatenate((TKNS, le_model.encode(f"{message}")))
 
-    if args.hidden_end_of_line:
-        with LeLocle:
-            TKNS = np.concatenate((TKNS, le_model.encode(f"{args.hidden_end_of_line}")))
-
-    if not args.character and args.start_of_line:
-        with LeLocle:
-            TKNS = np.concatenate((TKNS, le_model.encode(f"\n{args.start_of_line}")))
-
     with LeLocle:
         TKNS = np.concatenate((TKNS, le_model.encode(f"{SEPARATORS}")))
-
-    with LeLocle:
-        END_PREF = len(TKNS)
-
-    if args.character:
-        args.character = args.character.strip()
-        with LeLocle:
-            TKNS = np.concatenate((TKNS, le_model.encode(f"{args.character}\n")))
-        if args.start_of_line:
-            args.start_of_line = args.start_of_line.strip()
-            with LeLocle:
-                TKNS = np.concatenate((TKNS, le_model.encode(f"{args.start_of_line}")))
-            tkns, _ = le_model.gen_avoiding(
-                TKNS,
-                avoided_tkn_or_regex=le_model.encode("<|e|>"),
-                chunk_length=5,
-                temperature=args.temperature,
-                top_k=args.top_k,
-                top_p=args.top_p,
-                batch_size=args.batch_size,
-                skip_encoding=True,
-                return_tokens=True,
-            )
-            with LeLocle:
-                TKNS = tkns[0]
 
     # pprint("(after reception, TKNS are now:)", sep="-", sp_bf=True)
     # print(TKNS[0], type(TKNS[0]))
@@ -573,8 +598,8 @@ def send_config():
             "random_threshold": args.random_threshold,
             "rank_threshold": args.rank_threshold,
             "character": args.character,
-            "hidden_end_of_line": args.hidden_end_of_line,
-            "start_of_line": args.start_of_line,
+            "hidden_before_char": args.hidden_before_char,
+            "hidden_after_char": args.hidden_after_char,
         },
     )
 
