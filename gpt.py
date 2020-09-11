@@ -665,7 +665,7 @@ class Model:
         if isinstance(s, str):
             return self.enc.encode(s)
         elif isinstance(s, (list, tuple, np.ndarray)):
-            return np.array([self.enc.encode(ss) for ss in s])
+            return np.ndarray.astype([self.enc.encode(ss) for ss in s], dtype=np.int32)
 
     def decode(self, s):
         """
