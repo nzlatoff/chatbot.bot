@@ -154,7 +154,31 @@ parser.add_argument(
     context). Defaults to nothing.""",
 )
 
+parser.add_argument(
+    "--wait_for_master",
+    type=int,
+    default=0,
+    help="""Waiting time before activating the default message choice. When
+    generating with more than one message per batch, the /master can choose the
+    message, in the time frame here defined, after which the standard choice
+    process kicks in. Defaults to 0 seconds (no wait, the master sets it from
+    /master).""",
+)
+
+parser.add_argument(
+    "--bot_choice",
+    choices=("sampling", "min", "max"),
+    type=str,
+    default="sampling",
+    help="""The bot's method for choosing messages. Available options: sampling
+    (random choice weighted by the perplexities of the messages), min
+    (perplexity), max (perplexity)""",
+)
+
 args = parser.parse_args()
+
+if args.agent:
+    args.new = False
 
 sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
@@ -174,7 +198,7 @@ def print_config():
 
 
 def pprint(
-    msg, width=40, off="", sep="", sep_aft="", sp_bf=False, sp_aft=False, und=False
+    msg, width=80, off="", sep="", sep_aft="", sp_bf=False, sp_aft=False, und=False
 ):
     if sp_bf:
         print()
@@ -213,13 +237,18 @@ IS_GENERATING = False
 
 REPLIQUE_RE = regex.compile("<\|s\|>\n(.*?)\n+<\|e\|>", regex.DOTALL)
 SEPARATORS = "\n<|e|>\n<|s|>\n"
+SEP_TKNS = le_model.encode(SEPARATORS)
+SEP_TKNS_LEN = len(SEP_TKNS)
 END = "\n<|e|>\n"
 START = "<|s|>\n"
 
 MESSAGES = []
 PREFIX = ""
 
+BATCH_MSG_IND = None
+
 TKNS = np.array([], dtype=np.int32)
+RECEIVED_MSGS = np.array([], dtype=np.int32)
 
 print_config()
 
@@ -241,40 +270,69 @@ def fancy_typing(char, message):
             time.sleep(args.print_speed)
 
 
-def generate_new():
+def preprocess_prefix():
 
-    global IS_GENERATING
+    global SEP_TKNS_LEN
+    global SEP_TKNS
     global TKNS
 
-    # pprint("(tkns)", sep="-", sp_bf=True, sp_aft=True)
-    # print(TKNS)
+    end_pref_orig = len(TKNS)
+    end_pref = end_pref_orig
+    end_pref_after_injections = end_pref_orig
+    len_injections = 0
+
+    pprint("(tkns)", sep="-", off="\t\t\t", sp_bf=True)
+    pprint(str(TKNS), off="\t\t\t", sp_aft=True)
+    pprint(f"length: {end_pref_orig}", off="\t\t\t", sp_aft=True)
 
     pprint("(prefix)", sp_bf=True, off="\t\t\t", sp_aft=True)
     pprint(le_model.decode(TKNS), off="\t\t\t", sp_aft=True)
 
-    IS_GENERATING = True
+    if not args.character:
 
-    if should_sess_be_reset():
-        return
+        # if no char injected, inject before markers:
+        # - add hidden_after_char
+        # - add hidden_after_char
+        # - markers
 
-    # character & other injections
-    if args.hidden_before_char:
-        args.hidden_before_ch = args.hidden_before_char.strip()
+        if args.hidden_after_char:
+            args.hidden_after_char = args.hidden_after_char.strip()
+            hidden_after_encoded = le_model.encode(f"\n{args.hidden_after_char}")
+            len_injections += len(hidden_after_encoded)
+            with LeLocle:
+                TKNS = np.concatenate((TKNS, hidden_after_encoded))
+
+        if args.hidden_before_char:
+            args.hidden_before_ch = args.hidden_before_char.strip()
+            hidden_before_encoded = le_model.encode(f"\n{args.hidden_before_char}")
+            len_injections += len(hidden_before_encoded)
+            with LeLocle:
+                TKNS = np.concatenate((TKNS, hidden_before_encoded))
+
+        # markers
+        len_injections += SEP_TKNS_LEN
         with LeLocle:
-            TKNS = np.concatenate(
-                (TKNS, le_model.encode(f"{args.hidden_before_char}\n"))
-            )
+            TKNS = np.concatenate((TKNS, SEP_TKNS))
 
-    if not args.character and args.hidden_after_char:
-        args.hidden_after_char = args.hidden_after_char.strip()
+        end_pref = end_pref_orig + len_injections
+
+    else:
+
+        # if char, add markers, then the rest
+
+        len_injections += SEP_TKNS_LEN
         with LeLocle:
-            TKNS = np.concatenate(
-                (TKNS, le_model.encode(f"{args.hidden_after_char}\n"))
-            )
+            TKNS = np.concatenate((TKNS, SEP_TKNS))
 
-    end_pref = len(TKNS)
+        if args.hidden_before_char:
+            args.hidden_before_ch = args.hidden_before_char.strip()
+            hidden_before_encoded = le_model.encode(f"{args.hidden_before_char}\n")
+            len_injections += len(hidden_before_encoded)
+            with LeLocle:
+                TKNS = np.concatenate((TKNS, hidden_before_encoded))
 
-    if args.character:
+        end_pref = end_pref_orig + len_injections
+
         args.character = args.character.strip()
         char_encoded = le_model.encode(f"{args.character}\n")
         with LeLocle:
@@ -282,66 +340,100 @@ def generate_new():
         end_pref_after_injections = end_pref + len(char_encoded)
         if args.hidden_after_char:
             args.hidden_after_char = args.hidden_after_char.strip()
-            after_char_encoded = le_model.encode(f"{args.hidden_after_char}")
+            after_char_encoded = le_model.encode(f"{args.hidden_after_char} ")
             with LeLocle:
-                TKNS = np.concatenate(
-                    (TKNS, after_char_encoded)
-                )
+                TKNS = np.concatenate((TKNS, after_char_encoded))
             end_pref_after_injections += len(after_char_encoded)
 
-    data = le_model.gen_avoiding(
-        TKNS,
-        avoiding=le_model.encode("<|e|>"),
-        length=10,
-        temperature=args.temperature,
-        top_k=args.top_k,
-        top_p=args.top_p,
-        batch_size=args.batch_size,
-    )
-    tkns_batch = data["tokens"]
+    return end_pref_orig, end_pref, end_pref_after_injections
 
-    pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
-    for i, seq in enumerate(data["sequences"]):
-        pprint(seq, off="\t\t")
-        pprint(f"| {data['perplexities'][i].item()} (perp)", off="\t\t", sep_aft="*")
+
+def select_in_batch(data, chars, messages):
+
+    global BATCH_MSG_IND
+
+    if BATCH_MSG_IND == -1:
+        if args.bot_choice == "sampling":
+            s = data["perplexities"].sum()
+            normed = np.nan_to_num(data["perplexities"] / s)
+            with LeLocle:
+                BATCH_MSG_IND = np.random.choice(
+                    data["perplexities"].shape[0], 1, p=normed.flatten()
+                ).item()
+        elif args.bot_choice == "min":
+            with LeLocle:
+                BATCH_MSG_IND = np.argmin(data["perplexities"])
+        elif args.bot_choice == "max":
+            with LeLocle:
+                BATCH_MSG_IND = np.argmax(data["perplexities"])
+        char = chars[BATCH_MSG_IND]
+        message = messages[BATCH_MSG_IND]
+        pprint(
+            f"({args.server_name} sending: bot's choice)",
+            sep="-",
+            sp_bf=True,
+            sp_aft=True,
+        )
+        pprint(char)
+        pprint(message)
+        pprint(f"(perp: {data['perplexities'][BATCH_MSG_IND].item()})")
+    else:
+        char = chars[BATCH_MSG_IND]
+        message = messages[BATCH_MSG_IND]
+        pprint(f"({args.server_name} sent: master's choice)", sep="-", sp_bf=True)
+        pprint(char)
+        pprint(message)
+        pprint(f"(perp: {data['perplexities'][BATCH_MSG_IND].item()})")
+    return char, message
+
+def handle_error(fn_name, end_pref_orig, e, trimming_factor=5/6, sleep_for=5):
+
+    global TKNS
+
+    send_three_dots()
+
+    pprint(
+        f"O.O.O.P.S. A problem ocurred during {fn_name}: {repr(e)}",
+        sep="=",
+        sp_bf=True,
+    )
+    pprint(
+        f"! PERHAPS DANGEROUS LENGTH REACHED ? Trimming by {trimming_factor}, in case.",
+    )
+
+    two_thirds = int(end_pref_orig * trimming_factor)
 
     with LeLocle:
-        TKNS = tkns_batch
+        TKNS = TKNS[two_thirds:]
+        pprint(
+            f"(Length is now: {len(TKNS)}, will sleep for a bit while I'm at it...)",
+            sp_aft=True,
+            sep_aft="=",
+        )
+        time.sleep(sleep_for)
 
-    data = le_model.gen_until(
-        prefix=TKNS,
-        until="<|s|>",
-        exclude_until=False,
-        sanity_limit=300,
-        chunk_length=5,
-        temperature=args.temperature,
-        top_p=args.top_p,
-        top_k=args.top_k,
-        batch_size=args.batch_size,
-    )
-    tkns_batch = data["tokens"]
-
-    # pprint("(generated: with hidden)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
-    # for i, seq in enumerate(data["sequences"]):
-    #     pprint(seq, off="\t\t")
-    #     pprint(f"| {data['perplexities'][i].item()} (perp)", off="\t\t", sep_aft="*")
-
+def trim_tokens(tkns, end_pref, end_pref_after_injections):
     if args.character:
         generated = []
-        for tkns in tkns_batch:
+        for tkns in tkns:
             tmp_seq = le_model.decode(
-                np.concatenate((char_encoded, tkns[end_pref_after_injections:]))
+                np.concatenate(
+                    (
+                        le_model.encode(f"{args.character}\n"),
+                        tkns[end_pref_after_injections:],
+                    )
+                )
             )
             tmp_seq = tmp_seq.strip()
             generated.append(tmp_seq)
     else:
         generated = [
             seq.strip()
-            for seq in le_model.decode([tkns[end_pref:] for tkns in tkns_batch])
+            for seq in le_model.decode([tkns[end_pref:] for tkns in tkns])
         ]
+    return generated
 
-    pprint("(generated)", off="\t", sep="-", sp_bf=True, sp_aft=True)
-
+def extract_chars_msgs(generated, data):
     chars = []
     messages = []
     for i, g in enumerate(generated):
@@ -354,25 +446,147 @@ def generate_new():
 
         pprint(char, off="\t")
         pprint(message, off="\t")
-        pprint(f"{data['perplexities'][i].item()} (perp)", off="\t", sep_aft="*")
+        pprint(f"(perp: {data['perplexities'][i].item()})", off="\t", sep_aft="*")
 
         chars.append(char)
         messages.append(message)
+    return chars, messages
 
-    send_batch({
-        "id": sio.sid,
-        "chars": chars,
-        "messages": messages,
-        "perplexities": data["perplexities"].tolist(),
-    })
+def generate_new():
 
-    min_ind = np.argmin(data["perplexities"])
-    char = chars[min_ind]
-    message = messages[min_ind]
-    pprint("(sent)", sep="-", sp_bf=True)
-    pprint(char)
-    pprint(message)
-    pprint(f"| {np.min(data['perplexities'])} (perp)")
+    global IS_GENERATING
+    global RECEIVED_MSGS
+    global BATCH_MSG_IND
+    global TKNS
+
+    with LeLocle:
+        IS_GENERATING = True
+
+    send_typing(
+        {"id": sio.sid, "character": "", "message": "", "user": args.server_name,}
+    )
+
+    if should_sess_be_reset():
+        return
+
+    if RECEIVED_MSGS.size > 0:
+        with LeLocle:
+            pprint(
+                "(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True
+            )
+            pprint(le_model.decode(RECEIVED_MSGS), off="\t\t\t", sp_aft=True)
+            TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
+            RECEIVED_MSGS = np.array([], np.int32)
+
+    if should_sess_be_reset():
+        return
+
+    end_pref_orig, end_pref, end_pref_after_injections = preprocess_prefix()
+
+    if should_sess_be_reset():
+        return
+
+    # first produce a small bit avoiding the end token
+    try:
+        data = le_model.gen_avoiding(
+            prefix=TKNS,
+            avoiding=le_model.encode("<|e|>"),
+            length=10,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            top_p=args.top_p,
+            batch_size=args.batch_size,
+        )
+
+    except Exception as e:
+        if should_sess_be_reset():
+            return
+        handle_error("gen_avoiding", end_pref_orig, e)
+        if should_sess_be_reset():
+            return
+        with LeLocle:
+            IS_GENERATING = False
+        return
+
+    pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+    for i, tkn in enumerate(data["tokens"]):
+        pprint(le_model.decode(tkn[end_pref_orig:]).strip(), off="\t\t")
+        pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t", sep_aft="*")
+
+    if should_sess_be_reset():
+        return
+
+    # then produce the rest, until the end token
+    try:
+        data = le_model.gen_until(
+            prefix=data["tokens"],
+            until="<|s|>",
+            exclude_until=False,
+            sanity_limit=300,
+            chunk_length=5,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            top_k=args.top_k,
+            batch_size=args.batch_size,
+        )
+
+    except Exception as e:
+        if should_sess_be_reset():
+            return
+        handle_error("gen_until", end_pref_orig, e)
+        if should_sess_be_reset():
+            return
+        with LeLocle:
+            IS_GENERATING = False
+        return
+
+    generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
+
+    if should_sess_be_reset():
+        return
+
+    pprint("(generated)", off="\t", sep="-", sp_bf=True, sp_aft=True)
+
+    if should_sess_be_reset():
+        return
+
+    chars, messages = extract_chars_msgs(generated, data)
+
+    if should_sess_be_reset():
+        return
+
+    send_batch(
+        {
+            "id": sio.sid,
+            "chars": chars,
+            "messages": messages,
+            "perplexities": data["perplexities"].tolist(),
+            "seconds": args.wait_for_master,
+        }
+    )
+
+    i = 0
+    print()
+    while BATCH_MSG_IND == None:
+        if should_sess_be_reset():
+            return
+        print(
+            f"\t(waiting for batch choice ({args.wait_for_master - i}))", end="     \r"
+        )
+        time.sleep(1)
+        i += 1
+        if i > args.wait_for_master + 2:
+            print("\twaited enough, bot taking back control")
+            with LeLocle:
+                BATCH_MSG_IND = -1
+
+    if should_sess_be_reset():
+        return
+
+    char, message = select_in_batch(data, chars, messages)
+
+    if should_sess_be_reset():
+        return
 
     fancy_typing(char, message)
 
@@ -382,14 +596,13 @@ def generate_new():
     send_message({"character": char, "message": message, "user": args.server_name})
 
     with LeLocle:
-        TKNS = tkns_batch[0]
+        TKNS = data["tokens"][BATCH_MSG_IND]
+        BATCH_MSG_IND = None
+        IS_GENERATING = False
 
-    # else:
-    #     pprint("(RANK INSUFFICIENT: NOT ANSWERING)", off="\t", sp_bf=True, sp_aft=True)
 
-    IS_GENERATING = False
-    if should_sess_be_reset():
-        return
+# ----------------------------------------
+# legacy generation (based on strings)
 
 
 def generate():
@@ -412,7 +625,8 @@ def generate():
     max_len = 1024 - args.length_desired
     if len(prefix_enc) > max_len:
         prefix_enc = prefix_enc[-max_len:]
-        PREFIX = le_model.decode(prefix_enc)
+        with LeLocle:
+            PREFIX = le_model.decode(prefix_enc)
 
     # add end of answer, store length of prefix
     end_pref = len(PREFIX)
@@ -474,7 +688,8 @@ def generate():
             send_message(
                 {"character": char, "message": message, "user": args.server_name}
             )
-            PREFIX = f"{PREFIX}{START}{char}\n{message}"
+            with LeLocle:
+                PREFIX = f"{PREFIX}{START}{char}\n{message}"
         else:
             pprint(
                 "(RANK INSUFFICIENT: NOT ANSWERING)", off="\t", sp_bf=True, sp_aft=True
@@ -484,7 +699,8 @@ def generate():
         pprint(l, off="\t\t", sp_aft=True)
         pprint("(MARKERS NOT FOUND: NOT ANSWERING)", off="\t\t")
 
-    IS_GENERATING = False
+    with LeLocle:
+        IS_GENERATING = False
     if should_sess_be_reset():
         return
 
@@ -496,23 +712,31 @@ def should_sess_be_reset():
         print(f"generation interrupted")
         print()
         print("=" * 40)
-        IS_GENERATING = False
-        RESETTING_SESSION = False
+        send_three_dots()
+        with LeLocle:
+            IS_GENERATING = False
+            RESETTING_SESSION = False
         return True
 
 
 @sio.event
 def connect():
+    global IS_GENERATING
+    global SEP_TKNS
     global TKNS
-    print("connection established")
+    print(f"{args.server_name} established connection")
     print("-" * 40)
     sio.emit("new bot", args.server_name)
     if args.agent:
         with LeLocle:
-            TKNS = le_model.encode("\n<|e|>\n<|s|>\n")
+            TKNS = le_model.encode(SEP_TKNS)
         while True:
-            generate_new()
-            time.sleep(10)
+            if not IS_GENERATING:
+                print()
+                generate_new()
+                time.sleep(10)
+            else:
+                print("(is generating, not answering...)\r", end="")
 
 
 @sio.event
@@ -541,10 +765,12 @@ def reset_session():
     print("resetting session")
 
     MESSAGES = []
-    PREFIX = ""
+    with LeLocle:
+        PREFIX = ""
     TKNS = np.array([], dtype=np.int32)
     if IS_GENERATING:
-        RESETTING_SESSION = True
+        with LeLocle:
+            RESETTING_SESSION = True
     else:
         print()
         print("=" * 40)
@@ -554,6 +780,7 @@ def reset_session():
 def on_chat_message(data):
 
     global IS_GENERATING
+    global RECEIVED_MSGS
     global MESSAGES
     global PREFIX
     global TKNS
@@ -570,25 +797,28 @@ def on_chat_message(data):
     MESSAGES.append(data)
     character = data["character"]
     message = data["message"]
-    if character:
-        PREFIX = f"{PREFIX}{SEPARATORS}{character}\n{message}{END}"
-        with LeLocle:
-            TKNS = np.concatenate((TKNS, le_model.encode(f"{character}\n{message}")))
-    else:
-        PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
-        with LeLocle:
-            TKNS = np.concatenate((TKNS, le_model.encode(f"{message}")))
 
-    with LeLocle:
-        TKNS = np.concatenate((TKNS, le_model.encode(f"{SEPARATORS}")))
+    added_seps = False
+    if character:
+        with LeLocle:
+            PREFIX = f"{PREFIX}{SEPARATORS}{character}\n{message}{END}"
+            RECEIVED_MSGS = np.concatenate(
+                (RECEIVED_MSGS, le_model.encode(f"{character}\n{message}"))
+            )
+    else:
+        with LeLocle:
+            PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
+            RECEIVED_MSGS = np.concatenate(
+                (RECEIVED_MSGS, le_model.encode(f"{message}"))
+            )
 
     # pprint("(after reception, TKNS are now:)", sep="-", sp_bf=True)
     # print(TKNS[0], type(TKNS[0]))
     # pprint(le_model.decode(TKNS)[0], sp_aft=True)
 
-    rand = random.random()
-    pprint(f"(random has spoken: {rand})", off="\t", sp_bf=True)
     if not IS_GENERATING:
+        rand = random.random()
+        pprint(f"(random has spoken: {rand})", off="\t", sp_bf=True)
         if rand > args.random_threshold:
             pprint("(random is bountiful, let's generate)", off="\t", sp_aft=True)
             if args.new:
@@ -597,6 +827,10 @@ def on_chat_message(data):
                 pass
             else:
                 generate()
+        else:
+            pprint(
+                "(nope, the wall of random could not be passed)", off="\t", sp_aft=True
+            )
     else:
         pprint("(is generating, not answering...)", off="\t", sp_aft=True)
 
@@ -620,6 +854,7 @@ def send_config():
             "character": args.character,
             "hidden_before_char": args.hidden_before_char,
             "hidden_after_char": args.hidden_after_char,
+            "wait_for_master": args.wait_for_master,
         },
     )
 
@@ -643,11 +878,45 @@ def set_config(data):
         print()
 
 
+@sio.on("server sends choice")
+def set_message_choice(data):
+
+    global BATCH_MSG_IND
+
+    if data["id"] == sio.sid:
+        with LeLocle:
+            BATCH_MSG_IND = data["choice"]
+        if BATCH_MSG_IND == -1:
+            pprint(
+                f"received batch choice: '-1' received, the bot will choose",
+                sep="-",
+                off="\t",
+            )
+        else:
+            pprint(
+                f"received batch choice: message chosen: {BATCH_MSG_IND}",
+                sep="-",
+                off="\t",
+            )
+
+
 def send_typing(data):
     sio.emit("typing", data)
 
+def send_three_dots():
+    send_typing(
+        {
+            "id": sio.sid,
+            "character": "",
+            "message": "...",
+            "user": args.server_name,
+        }
+    )
+
+
 def send_batch(data):
     sio.emit("chat batch", data)
+
 
 def send_message(data):
     # print("-"*40)
