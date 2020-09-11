@@ -310,9 +310,10 @@ def preprocess_prefix():
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
 
         # markers
-        len_injections += SEP_TKNS_LEN
-        with LeLocle:
-            TKNS = np.concatenate((TKNS, SEP_TKNS))
+        if args.hidden_after_char or args.hidden_before_char:
+            len_injections += SEP_TKNS_LEN
+            with LeLocle:
+                TKNS = np.concatenate((TKNS, SEP_TKNS))
 
         end_pref = end_pref_orig + len_injections
 
@@ -386,7 +387,8 @@ def select_in_batch(data, chars, messages):
         pprint(f"(perp: {data['perplexities'][BATCH_MSG_IND].item()})")
     return char, message
 
-def handle_error(fn_name, end_pref_orig, e, trimming_factor=5/6, sleep_for=5):
+
+def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 
     global TKNS
 
@@ -412,6 +414,7 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5/6, sleep_for=5):
         )
         time.sleep(sleep_for)
 
+
 def trim_tokens(tkns, end_pref, end_pref_after_injections):
     if args.character:
         generated = []
@@ -428,10 +431,10 @@ def trim_tokens(tkns, end_pref, end_pref_after_injections):
             generated.append(tmp_seq)
     else:
         generated = [
-            seq.strip()
-            for seq in le_model.decode([tkns[end_pref:] for tkns in tkns])
+            seq.strip() for seq in le_model.decode([tkns[end_pref:] for tkns in tkns])
         ]
     return generated
+
 
 def extract_chars_msgs(generated, data):
     chars = []
@@ -452,6 +455,7 @@ def extract_chars_msgs(generated, data):
         messages.append(message)
     return chars, messages
 
+
 def generate_new():
 
     global IS_GENERATING
@@ -471,6 +475,7 @@ def generate_new():
 
     if RECEIVED_MSGS.size > 0:
         with LeLocle:
+            RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN] # removing last separators
             pprint(
                 "(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True
             )
@@ -729,14 +734,23 @@ def connect():
     sio.emit("new bot", args.server_name)
     if args.agent:
         with LeLocle:
-            TKNS = le_model.encode(SEP_TKNS)
+            TKNS = SEP_TKNS
+        has_warned = False
         while True:
             if not IS_GENERATING:
                 print()
+                has_warned = False
                 generate_new()
                 time.sleep(10)
             else:
-                print("(is generating, not answering...)\r", end="")
+                if not has_warned:
+                    pprint(
+                        "(is generating, not answering...)\r",
+                        sep="-",
+                        sp_bf=True,
+                        sp_aft=True,
+                    )
+                    has_warned = True
 
 
 @sio.event
@@ -803,13 +817,13 @@ def on_chat_message(data):
         with LeLocle:
             PREFIX = f"{PREFIX}{SEPARATORS}{character}\n{message}{END}"
             RECEIVED_MSGS = np.concatenate(
-                (RECEIVED_MSGS, le_model.encode(f"{character}\n{message}"))
+                (RECEIVED_MSGS, le_model.encode(f"{character}\n{message}"), SEP_TKNS)
             )
     else:
         with LeLocle:
             PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
             RECEIVED_MSGS = np.concatenate(
-                (RECEIVED_MSGS, le_model.encode(f"{message}"))
+                (RECEIVED_MSGS, le_model.encode(f"{message}"), SEP_TKNS)
             )
 
     # pprint("(after reception, TKNS are now:)", sep="-", sp_bf=True)
@@ -903,14 +917,10 @@ def set_message_choice(data):
 def send_typing(data):
     sio.emit("typing", data)
 
+
 def send_three_dots():
     send_typing(
-        {
-            "id": sio.sid,
-            "character": "",
-            "message": "...",
-            "user": args.server_name,
-        }
+        {"id": sio.sid, "character": "", "message": "...", "user": args.server_name,}
     )
 
 
