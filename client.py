@@ -440,6 +440,212 @@ def extract_chars_msgs(generated, data):
         messages.append(message)
     return chars, messages
 
+# ----------------------------------------
+# generation: mass production of sentences, selection of best ones
+
+def generate_mass():
+
+    global IS_GENERATING
+    global RECEIVED_MSGS
+    global BATCH_MSG_IND
+    global TKNS
+
+    with LeLocle:
+        IS_GENERATING = True
+
+    send_typing(
+        {"id": sio.sid, "character": "", "message": "", "user": args.server_name,}
+    )
+
+    if should_sess_be_reset():
+        return
+
+    if RECEIVED_MSGS.size > 0:
+        with LeLocle:
+            RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN] # removing last separators
+            pprint(
+                "(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True
+            )
+            pprint(le_model.decode(RECEIVED_MSGS), off="\t\t\t", sp_aft=True)
+            TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
+            RECEIVED_MSGS = np.array([], np.int32)
+
+    if should_sess_be_reset():
+        return
+
+    end_pref_orig, end_pref, end_pref_after_injections = preprocess_prefix()
+
+    if should_sess_be_reset():
+        return
+
+    suitors = {
+        "tokens": [],
+        "perplexities": np.array([], dtype=np.int32),
+        "chars": [],
+        "messages": [],
+    }
+
+    while True:
+        # first produce a small bit avoiding the end token
+        try:
+            data = le_model.gen_avoiding(
+                prefix=TKNS,
+                avoiding=le_model.encode("<|e|>"),
+                length=10,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                top_p=args.top_p,
+                batch_size=args.batch_size,
+            )
+
+        except Exception as e:
+            if should_sess_be_reset():
+                return
+            handle_error("gen_avoiding", end_pref_orig, e)
+            if should_sess_be_reset():
+                return
+            with LeLocle:
+                IS_GENERATING = False
+            return
+
+        pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+        for i, tkn in enumerate(data["tokens"]):
+            pprint(le_model.decode(tkn[end_pref_orig:]).strip(), off="\t\t")
+            pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t", sep_aft="*")
+
+        if should_sess_be_reset():
+            return
+
+        # then produce the rest, until the end token
+        try:
+            data = le_model.gen_until(
+                prefix=data["tokens"],
+                until="<|s|>",
+                exclude_until=False,
+                sanity_limit=300,
+                chunk_length=5,
+                temperature=args.temperature,
+                top_p=args.top_p,
+                top_k=args.top_k,
+                batch_size=args.batch_size,
+            )
+
+        except Exception as e:
+            if should_sess_be_reset():
+                return
+            handle_error("gen_until", end_pref_orig, e)
+            if should_sess_be_reset():
+                return
+            with LeLocle:
+                IS_GENERATING = False
+            return
+
+        if suitors["perplexities"].size == 0:
+
+            suitors["perplexities"] = data["perplexities"]
+            suitors["tokens"] = data["tokens"]
+
+            generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
+
+            if should_sess_be_reset():
+                return
+
+            pprint("(generated)", off="\t", sep="-", sp_bf=True, sp_aft=True)
+
+            if should_sess_be_reset():
+                return
+
+            chars, messages = extract_chars_msgs(generated, data)
+
+            suitors["chars"] = chars
+            suitors["messages"] = messages
+
+            if should_sess_be_reset():
+                return
+
+        else:
+
+            concat_perps = np.concatenate((suitors["perplexities"].flatten(), data["perplexities"].flatten()))
+            n = 5 # get the n smallest perps of 'em all
+            n_best_indz = np.argpartition(concat_perps, n)
+            suitors["perplexities"] = concat_perps[n_best_indz][:n][:, None]
+            # use same partition to extract the sequences
+            concat_seqs = np.array(suitors["tokens"] + data["tokens"])
+            suitors["tokens"] = list(concat_seqs[n_best_indz][:n])
+
+            generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
+
+            if should_sess_be_reset():
+                return
+
+            pprint("(generated)", off="\t", sep="-", sp_bf=True, sp_aft=True)
+
+            if should_sess_be_reset():
+                return
+
+            chars, messages = extract_chars_msgs(generated, data)
+
+            concat_chars = np.array(suitors["chars"] + chars)
+            suitors["chars"] = list(concat_chars[n_best_indz][:n])
+            concat_messages = np.array(suitors["messages"] + messages)
+            suitors["messages"] = list(concat_messages[n_best_indz][:n])
+
+            pprint("(current selection)", off="\t", sep="-", sp_bf=True, sp_aft=True)
+            for i in range(n):
+                pprint(suitors["chars"][i], off="\t")
+                pprint(suitors["messages"][i], off="\t")
+                pprint(f"(perp: {suitors['perplexities'][i].item()})", off="\t", sep_aft="*")
+
+            if should_sess_be_reset():
+                return
+
+    send_batch(
+        {
+            "id": sio.sid,
+            "chars": chars,
+            "messages": messages,
+            "perplexities": data["perplexities"].tolist(),
+            "seconds": args.wait_for_master,
+        }
+    )
+
+    i = 0
+    print()
+    while BATCH_MSG_IND == None:
+        if should_sess_be_reset():
+            return
+        print(
+            f"\t(waiting for batch choice ({args.wait_for_master - i}))", end="     \r"
+        )
+        time.sleep(1)
+        i += 1
+        if i > args.wait_for_master + 2:
+            print("\twaited enough, bot taking back control")
+            with LeLocle:
+                BATCH_MSG_IND = -1
+
+    if should_sess_be_reset():
+        return
+
+    char, message = select_in_batch(data, chars, messages)
+
+    if should_sess_be_reset():
+        return
+
+    fancy_typing(char, message)
+
+    if should_sess_be_reset():
+        return
+
+    send_message({"character": char, "message": message, "user": args.server_name})
+
+    with LeLocle:
+        TKNS = data["tokens"][BATCH_MSG_IND]
+        BATCH_MSG_IND = None
+        IS_GENERATING = False
+
+
+
 
 # ----------------------------------------
 # generation: based on tokens
@@ -714,7 +920,7 @@ def connect():
             if not IS_GENERATING:
                 print()
                 has_warned = False
-                generate_new()
+                generate_mass()
                 time.sleep(10)
             else:
                 if not has_warned:
