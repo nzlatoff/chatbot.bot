@@ -1,10 +1,12 @@
+from print_utils import print_underlined
+from print_utils import print_config
+from print_utils import pprint
 from base64 import b64encode
 from threading import Lock
 from gpt import Model
 import numpy as np
 import socketio
 import argparse
-import textwrap
 import random
 import regex
 import time
@@ -182,45 +184,6 @@ if args.agent:
 
 sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
-
-def print_underlined(msg):
-    print(msg)
-    print("-" * len(msg))
-
-
-def print_config():
-    print("-" * 40)
-    print("(settings:)")
-    print()
-    for k, v in vars(args).items():
-        print(f"- {k}: {v}")
-    print()
-
-
-def pprint(
-    msg, width=80, off="", sep="", sep_aft="", sp_bf=False, sp_aft=False, und=False
-):
-    if sp_bf:
-        print()
-    if sep:
-        print(off + sep * width)
-    if und:
-        print(f"{off}{msg}")
-        print(off + "-" * len(msg))
-    else:
-        print(
-            "\n".join(
-                textwrap.wrap(
-                    msg, width=width, initial_indent=off, subsequent_indent=off
-                )
-            )
-        )
-    if sep_aft:
-        print(off + sep_aft * width)
-    if sp_aft:
-        print()
-
-
 LeLocle = Lock()
 
 le_model = Model(
@@ -231,6 +194,9 @@ le_model = Model(
     if not (args.new or args.agent)
     else ["<|s|>", "<|e|>", "<|endoftext|>"],
 )
+
+# ----------------------------------------
+# all the lovely globals
 
 RESETTING_SESSION = False
 IS_GENERATING = False
@@ -250,7 +216,26 @@ BATCH_MSG_IND = None
 TKNS = np.array([], dtype=np.int32)
 RECEIVED_MSGS = np.array([], dtype=np.int32)
 
-print_config()
+# ----------------------------------------
+# for printing see print_utils.py
+
+print_config(args)
+
+# ----------------------------------------
+# utils
+
+def should_sess_be_reset():
+    global RESETTING_SESSION
+    global IS_GENERATING
+    if RESETTING_SESSION:
+        print(f"generation interrupted")
+        print()
+        print("=" * 40)
+        send_three_dots()
+        with LeLocle:
+            IS_GENERATING = False
+            RESETTING_SESSION = False
+        return True
 
 
 def fancy_typing(char, message):
@@ -455,6 +440,9 @@ def extract_chars_msgs(generated, data):
         messages.append(message)
     return chars, messages
 
+
+# ----------------------------------------
+# generation: based on tokens
 
 def generate_new():
 
@@ -708,20 +696,6 @@ def generate():
         IS_GENERATING = False
     if should_sess_be_reset():
         return
-
-
-def should_sess_be_reset():
-    global RESETTING_SESSION
-    global IS_GENERATING
-    if RESETTING_SESSION:
-        print(f"generation interrupted")
-        print()
-        print("=" * 40)
-        send_three_dots()
-        with LeLocle:
-            IS_GENERATING = False
-            RESETTING_SESSION = False
-        return True
 
 
 @sio.event
