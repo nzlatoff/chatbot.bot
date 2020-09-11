@@ -178,7 +178,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 if args.agent:
-    args.new = False
+    args.new = True
 
 sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
