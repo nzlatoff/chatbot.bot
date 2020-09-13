@@ -456,21 +456,18 @@ def le_random_wall(fn):
     rand = random.random()
     pprint(f"(random has spoken: {rand})", off="\t", sp_bf=True)
     if rand > args.random_threshold:
-        pprint("(le grreat rrrandom is bountiful, let's generate)", off="\t", sp_aft=True)
+        pprint(
+            "(le grreat rrrandom is bountiful, let's generate)", off="\t", sp_aft=True
+        )
         fn()
     else:
-        pprint(
-            "(nope, the wall of random could not be passed)", off="\t", sp_aft=True
-        )
+        pprint("(nope, the wall of random could not be passed)", off="\t", sp_aft=True)
 
 
 def le_warning(has_warned):
     if not has_warned:
         pprint(
-            "(is generating, not answering...)\r",
-            sep="-",
-            sp_bf=True,
-            sp_aft=True,
+            "(is generating, not answering...)\r", sep="-", sp_bf=True, sp_aft=True,
         )
         has_warned = True
         return has_warned
@@ -479,6 +476,7 @@ def le_warning(has_warned):
 def sleepy_times():
     pprint(f"(sleepy timezz, {args.sleepy_time})", sep="-", sp_bf=True, sp_aft=True)
     time.sleep(args.sleepy_time)
+
 
 # ----------------------------------------
 # generation: mass production of sentences, selection of best ones
@@ -747,7 +745,10 @@ def generate_new():
 
     if TKNS_LEN_THRESHOLD and TKNS.size >= TKNS_LEN_THRESHOLD:
         pprint(
-            "(REACHED THRESHOLD LENGTH, TRIMMING)", sp_bf=True, off="\t\t\t", sp_aft=True
+            "(REACHED THRESHOLD LENGTH, TRIMMING)",
+            sp_bf=True,
+            off="\t\t\t",
+            sp_aft=True,
         )
         with LeLocle:
             TKNS = TKNS[-TKNS_LEN_THRESHOLD:]
