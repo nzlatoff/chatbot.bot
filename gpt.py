@@ -264,11 +264,15 @@ class Model:
         --------
         if the searched string is a special token:
             a dictionary containig:
-                sequences: the decoded generated sequences.
-                tokens: the generated tokens.
-                logits: all the scores for all tokens at each step.
-                logprobs: the normalized logits (after softmax).
-                perplexities: the perplexity for each sentence, shape: (n_sequences, 1)
+                sequences: the decoded generated sequences. A list of strings
+                    of various lengths.
+                tokens: the generated tokens. A list of np.arrays of various
+                    lengths.
+                logits: all the scores for all tokens at each step. A list of
+                    np.arrays of various lengths n_sequences * (len_seq, n_vocab).
+                logprobs: the normalized logits (after softmax). A list of
+                    np.arrays of various lengths n_sequences * (len_seq, n_vocab).
+                perplexities: the perplexity for each sentence, np.array shape: (n_sequences, 1)
                 scores: sequence of logits (scores, unnormalized) for each sequence
                         shape: (batch_size, n_tokens)
                 scores_min:  the min of scores, shape: (batch_size, 1)
