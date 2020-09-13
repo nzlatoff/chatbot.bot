@@ -864,6 +864,11 @@ def generate_new():
             IS_GENERATING = False
         return
 
+    # sort the sequences
+    sorted_indz = np.argsort(data["perplexities"], axis=0).flatten()
+    data["perplexities"] = data["perplexities"][sorted_indz]
+    data["tokens"] = np.asarray(data["tokens"])[sorted_indz].tolist()
+
     generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
 
     if should_sess_be_reset():
