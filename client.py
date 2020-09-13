@@ -125,8 +125,9 @@ parser.add_argument(
     "--sleepy_time",
     type=int,
     default=10,
-    help="""Time the bot sleeps between each new attempt to produce text (for
-    autonomous & optimizer modes.""",
+    help="""The most time the bot sleeps between each new attempt to produce
+    text (for autonomous & optimizer modes. A random number is generated,
+    between 1 and sleepy_time, before each call of the generate function.""",
 )
 
 parser.add_argument(
@@ -475,7 +476,37 @@ def le_warning(has_warned):
 
 def sleepy_times():
     pprint(f"(sleepy timezz, {args.sleepy_time})", sep="-", sp_bf=True, sp_aft=True)
-    time.sleep(args.sleepy_time)
+    time.sleep(np.random.randint(1,args.sleepy_time + 1))
+
+
+def init():
+    global IS_GENERATING
+    global SEP_TKNS
+    global TKNS
+    if args.mode == "autonomous":
+        with LeLocle:
+            TKNS = SEP_TKNS
+        has_warned = False
+        while True:
+            if not IS_GENERATING:
+                print()
+                has_warned = False
+                le_random_wall(generate_new)
+                sleepy_times()
+            else:
+                has_warned = le_warning(has_warned)
+    elif args.mode == "optimizer":
+        with LeLocle:
+            TKNS = SEP_TKNS
+        has_warned = False
+        while True:
+            if not IS_GENERATING:
+                print()
+                has_warned = False
+                generate_mass()
+                sleepy_times()
+            else:
+                has_warned = le_warning(has_warned)
 
 
 # ----------------------------------------
@@ -997,30 +1028,7 @@ def connect():
     print(f"{args.server_name} established connection")
     print("-" * 40)
     sio.emit("new bot", args.server_name)
-    if args.mode == "autonomous":
-        with LeLocle:
-            TKNS = SEP_TKNS
-        has_warned = False
-        while True:
-            if not IS_GENERATING:
-                print()
-                has_warned = False
-                le_random_wall(generate_new)
-                sleepy_times()
-            else:
-                has_warned = le_warning(has_warned)
-    elif args.mode == "optimizer":
-        with LeLocle:
-            TKNS = SEP_TKNS
-        has_warned = False
-        while True:
-            if not IS_GENERATING:
-                print()
-                has_warned = False
-                generate_mass()
-                sleepy_times()
-            else:
-                has_warned = le_warning(has_warned)
+    init()
 
 
 @sio.event
