@@ -187,6 +187,21 @@ parser.add_argument(
     (perplexity), max (perplexity)""",
 )
 
+parser.add_argument(
+    "--patience",
+    type=int,
+    default=3,
+    help="""Number of times the bot tolerates not to beat its own record (in
+    optimizer mode). It keeps generating batches of sentences, keeping only the
+    n best ones (lowest perplexity). At first the bot is able to produce
+    sentences with a better perplexity rather easily, but as the best ones
+    are being saved each round, it becomes ever more rare that it is even able
+    to produce a new sentence that makes it into the n best ones. Patience is
+    the number of times the bot is allowed *not* to produce any new sentence
+    making it into the n best ones: once this happens, the batch is submitted
+    (either to be directly posted, or evaluated by the master. Default: 3.""",
+)
+
 args = parser.parse_args()
 
 
@@ -564,7 +579,8 @@ def generate_mass():
         "messages": [],
     }
 
-    while True:
+    patience = 0
+    while patience < args.patience:
         # first produce a small bit avoiding the end token
         try:
             data = le_model.gen_avoiding(
@@ -678,6 +694,7 @@ def generate_mass():
                     sep="-",
                     sp_bf=True,
                 )
+                patience += 1
 
             concat_chars = np.array(suitors["chars"] + chars)
             suitors["chars"] = list(concat_chars[n_best_indz][:n][sorted_indz])
@@ -697,16 +714,28 @@ def generate_mass():
             if should_sess_be_reset():
                 return
 
-            send_batch(
-                {
-                    "id": sio.sid,
-                    "chars": suitors["chars"],
-                    "messages": suitors["messages"],
-                    "perplexities": suitors["perplexities"].tolist(),
-                    "countdown": False,
-                }
-            )
+            if patience < args.patience:
+                send_batch(
+                    {
+                        "id": sio.sid,
+                        "chars": suitors["chars"],
+                        "messages": suitors["messages"],
+                        "perplexities": suitors["perplexities"].tolist(),
+                        "countdown": False,
+                    }
+                )
             # time.sleep(3)
+
+    send_batch(
+        {
+            "id": sio.sid,
+            "chars": suitors["chars"],
+            "messages": suitors["messages"],
+            "perplexities": suitors["perplexities"].tolist(),
+            "seconds": args.wait_for_master,
+            "countdown": True,
+        }
+    )
 
     i = 0
     print()
@@ -726,7 +755,7 @@ def generate_mass():
     if should_sess_be_reset():
         return
 
-    char, message = select_in_batch(data, chars, messages)
+    char, message = select_in_batch(suitors, suitors["chars"], suitors["messages"])
 
     if should_sess_be_reset():
         return
@@ -739,7 +768,7 @@ def generate_mass():
     send_message({"character": char, "message": message, "user": args.server_name})
 
     with LeLocle:
-        TKNS = data["tokens"][BATCH_MSG_IND]
+        TKNS = suitors["tokens"][BATCH_MSG_IND]
         BATCH_MSG_IND = None
         IS_GENERATING = False
 
@@ -1164,6 +1193,12 @@ def send_config():
                 "sleepy_time": args.sleepy_time,
             }
         )
+        if args.mode == "optimizer":
+            config.update(
+                {
+                    "patience": args.patience,
+                }
+            )
     sio.emit("config from bot", config)
 
 
