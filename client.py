@@ -234,16 +234,28 @@ print_config(args)
 
 
 def should_sess_be_reset():
+
     global RESETTING_SESSION
+    global RECEIVED_MSGS
+    global BATCH_MSG_IND
     global IS_GENERATING
+    global MESSAGES
+    global PREFIX
+    global TKNS
+
     if RESETTING_SESSION:
         print(f"generation interrupted")
         print()
         print("=" * 40)
         send_three_dots()
+        MESSAGES = []
         with LeLocle:
-            IS_GENERATING = False
+            RECEIVED_MSGS = np.array([], dtype=np.int32)
             RESETTING_SESSION = False
+            IS_GENERATING = False
+            BATCH_MSG_IND = None
+            TKNS = SEP_TKNS
+            PREFIX = ""
         return True
 
 
@@ -1055,16 +1067,16 @@ def reset_session():
     print()
     print("resetting session")
 
-    MESSAGES = []
-    with LeLocle:
-        PREFIX = ""
-        TKNS = SEP_TKNS
-        BATCH_MSG_IND = None
-        RECEIVED_MSGS = np.array([], dtype=np.int32)
     if IS_GENERATING:
         with LeLocle:
             RESETTING_SESSION = True
     else:
+        MESSAGES = []
+        with LeLocle:
+            RECEIVED_MSGS = np.array([], dtype=np.int32)
+            BATCH_MSG_IND = None
+            TKNS = SEP_TKNS
+            PREFIX = ""
         print()
         print("=" * 40)
 
