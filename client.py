@@ -203,18 +203,18 @@ IS_GENERATING = False
 
 REPLIQUE_RE = regex.compile("<\|s\|>\n(.*?)\n+<\|e\|>", regex.DOTALL)
 SEPARATORS = "\n<|e|>\n<|s|>\n"
-SEP_TKNS = le_model.encode(SEPARATORS)
-SEP_TKNS_LEN = len(SEP_TKNS)
 END = "\n<|e|>\n"
 START = "<|s|>\n"
 
 MESSAGES = []
 PREFIX = ""
 
-BATCH_MSG_IND = None
-
 TKNS = np.array([], dtype=np.int32)
+SEP_TKNS = le_model.encode(SEPARATORS)
+SEP_TKNS_LEN = len(SEP_TKNS)
 RECEIVED_MSGS = np.array([], dtype=np.int32)
+BATCH_MSG_IND = None
+TKNS_LEN_THRESHOLD = None
 
 # ----------------------------------------
 # for printing see print_utils.py
@@ -223,6 +223,7 @@ print_config(args)
 
 # ----------------------------------------
 # utils
+
 
 def should_sess_be_reset():
     global RESETTING_SESSION
@@ -295,10 +296,9 @@ def preprocess_prefix():
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
 
         # markers
-        if args.hidden_after_char or args.hidden_before_char:
-            len_injections += SEP_TKNS_LEN
-            with LeLocle:
-                TKNS = np.concatenate((TKNS, SEP_TKNS))
+        len_injections += SEP_TKNS_LEN
+        with LeLocle:
+            TKNS = np.concatenate((TKNS, SEP_TKNS))
 
         end_pref = end_pref_orig + len_injections
 
@@ -375,6 +375,7 @@ def select_in_batch(data, chars, messages):
 
 def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 
+    global TKNS_LEN_THRESHOLD
     global TKNS
 
     send_three_dots()
@@ -390,10 +391,13 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 
     two_thirds = int(end_pref_orig * trimming_factor)
 
+    old_len = len(TKNS)
+    TKNS_LEN_THRESHOLD = old_len - 50
+
     with LeLocle:
         TKNS = TKNS[two_thirds:]
         pprint(
-            f"(Length is now: {len(TKNS)}, will sleep for a bit while I'm at it...)",
+            f"(Length is now: {old_len - two_thirds}, capped to {TKNS_LEN_THRESHOLD} from now on, will also sleep for a bit while I'm at it...)",
             sp_aft=True,
             sep_aft="=",
         )
@@ -429,7 +433,7 @@ def extract_chars_msgs(generated, data):
             char = ""
             message = g
         else:
-            char = g[: g.find("\n")]
+            char = g[: g.find("\n")].strip()
             message = g[g.find("\n") + 1 :].strip()
 
         pprint(char, off="\t")
@@ -440,8 +444,10 @@ def extract_chars_msgs(generated, data):
         messages.append(message)
     return chars, messages
 
+
 # ----------------------------------------
 # generation: mass production of sentences, selection of best ones
+
 
 def generate_mass():
 
@@ -462,7 +468,7 @@ def generate_mass():
 
     if RECEIVED_MSGS.size > 0:
         with LeLocle:
-            RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN] # removing last separators
+            RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]  # removing last separators
             pprint(
                 "(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True
             )
@@ -565,13 +571,17 @@ def generate_mass():
 
         else:
 
-            concat_perps = np.concatenate((suitors["perplexities"].flatten(), data["perplexities"].flatten()))
-            n = 5 # get the n smallest perps of 'em all
+            concat_perps = np.concatenate(
+                (suitors["perplexities"].flatten(), data["perplexities"].flatten())
+            )
+            n = 5  # get the n smallest perps of 'em all
             n_best_indz = np.argpartition(concat_perps, n)
-            suitors["perplexities"] = concat_perps[n_best_indz][:n][:, None]
+            n_best_perps = concat_perps[n_best_indz][:n]
+            sorted_indz = np.argsort(n_best_perps)
+            suitors["perplexities"] = n_best_perps[sorted_indz][:, None]
             # use same partition to extract the sequences
             concat_seqs = np.array(suitors["tokens"] + data["tokens"])
-            suitors["tokens"] = list(concat_seqs[n_best_indz][:n])
+            suitors["tokens"] = list(concat_seqs[n_best_indz][:n][sorted_indz])
 
             generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
 
@@ -586,28 +596,33 @@ def generate_mass():
             chars, messages = extract_chars_msgs(generated, data)
 
             concat_chars = np.array(suitors["chars"] + chars)
-            suitors["chars"] = list(concat_chars[n_best_indz][:n])
+            suitors["chars"] = list(concat_chars[n_best_indz][:n][sorted_indz])
             concat_messages = np.array(suitors["messages"] + messages)
-            suitors["messages"] = list(concat_messages[n_best_indz][:n])
+            suitors["messages"] = list(concat_messages[n_best_indz][:n][sorted_indz])
 
             pprint("(current selection)", off="\t", sep="-", sp_bf=True, sp_aft=True)
             for i in range(n):
                 pprint(suitors["chars"][i], off="\t")
                 pprint(suitors["messages"][i], off="\t")
-                pprint(f"(perp: {suitors['perplexities'][i].item()})", off="\t", sep_aft="*")
+                pprint(
+                    f"(perp: {suitors['perplexities'][i].item()})",
+                    off="\t",
+                    sep_aft="*",
+                )
 
             if should_sess_be_reset():
                 return
 
-    send_batch(
-        {
-            "id": sio.sid,
-            "chars": chars,
-            "messages": messages,
-            "perplexities": data["perplexities"].tolist(),
-            "seconds": args.wait_for_master,
-        }
-    )
+            send_batch(
+                {
+                    "id": sio.sid,
+                    "chars": suitors["chars"],
+                    "messages": suitors["messages"],
+                    "perplexities": suitors["perplexities"].tolist(),
+                    "countdown": False,
+                }
+            )
+            time.sleep(3)
 
     i = 0
     print()
@@ -645,13 +660,13 @@ def generate_mass():
         IS_GENERATING = False
 
 
-
-
 # ----------------------------------------
 # generation: based on tokens
 
+
 def generate_new():
 
+    global TKNS_LEN_THRESHOLD
     global IS_GENERATING
     global RECEIVED_MSGS
     global BATCH_MSG_IND
@@ -663,19 +678,33 @@ def generate_new():
     send_typing(
         {"id": sio.sid, "character": "", "message": "", "user": args.server_name,}
     )
+    send_entrails(
+        {
+            "id": sio.sid,
+            "entrails": f"Tokens: {str(TKNS)}" if TKNS.size > 0 else "",
+            "user": args.server_name,
+        }
+    )
 
     if should_sess_be_reset():
         return
 
     if RECEIVED_MSGS.size > 0:
         with LeLocle:
-            RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN] # removing last separators
+            RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]  # removing last separators
             pprint(
                 "(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True
             )
             pprint(le_model.decode(RECEIVED_MSGS), off="\t\t\t", sp_aft=True)
             TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
             RECEIVED_MSGS = np.array([], np.int32)
+
+    if TKNS_LEN_THRESHOLD and TKNS.size >= TKNS_LEN_THRESHOLD:
+        pprint(
+            "(REACHED THRESHOLD LENGTH, TRIMMING)", sp_bf=True, off="\t\t\t", sp_aft=True
+        )
+        with LeLocle:
+            TKNS = TKNS[-TKNS_LEN_THRESHOLD:]
 
     if should_sess_be_reset():
         return
@@ -706,6 +735,14 @@ def generate_new():
         with LeLocle:
             IS_GENERATING = False
         return
+
+    send_entrails(
+        {
+            "id": sio.sid,
+            "entrails": f"Tokens:\n{str(data['tokens'])}\nLogprobs:\n{str(data['logprobs'])}\nPerplexities:\n{str(data['perplexities'])}",
+            "user": args.server_name,
+        }
+    )
 
     pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
     for i, tkn in enumerate(data["tokens"]):
@@ -761,6 +798,7 @@ def generate_new():
             "messages": messages,
             "perplexities": data["perplexities"].tolist(),
             "seconds": args.wait_for_master,
+            "countdown": True,
         }
     )
 
@@ -1096,6 +1134,10 @@ def set_message_choice(data):
 
 def send_typing(data):
     sio.emit("typing", data)
+
+
+def send_entrails(data):
+    sio.emit("entrails", data)
 
 
 def send_three_dots():
