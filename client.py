@@ -614,6 +614,9 @@ def generate_mass():
             n_best_perps = concat_perps[n_best_indz][:n]
             sorted_indz = np.argsort(n_best_perps)
             suitors["perplexities"] = n_best_perps[sorted_indz][:, None]
+
+            former_suitors = set([t.tostring() for t in suitors["tokens"]])
+
             # use same partition to extract the sequences
             concat_seqs = np.array(suitors["tokens"] + data["tokens"])
             suitors["tokens"] = list(concat_seqs[n_best_indz][:n][sorted_indz])
@@ -629,6 +632,14 @@ def generate_mass():
                 return
 
             chars, messages = extract_chars_msgs(generated, data)
+
+            if former_suitors == set([t.tostring() for t in suitors["tokens"]]):
+                pprint(
+                    "(NO UPDATE. Current production does not beat past record.)",
+                    off="\t",
+                    sep="-",
+                    sp_bf=True,
+                )
 
             concat_chars = np.array(suitors["chars"] + chars)
             suitors["chars"] = list(concat_chars[n_best_indz][:n][sorted_indz])
@@ -657,7 +668,7 @@ def generate_mass():
                     "countdown": False,
                 }
             )
-            time.sleep(3)
+            # time.sleep(3)
 
     i = 0
     print()
