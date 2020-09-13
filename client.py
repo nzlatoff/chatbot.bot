@@ -482,8 +482,7 @@ def le_warning(has_warned):
         pprint(
             "(is generating, not answering...)\r", sep="-", sp_bf=True, sp_aft=True,
         )
-        has_warned = True
-        return has_warned
+    return True
 
 
 def sleepy_times():
