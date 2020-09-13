@@ -1132,27 +1132,35 @@ def on_chat_message(data):
 
 @sio.on("get bot config")
 def send_config():
-    sio.emit(
-        "config from bot",
-        {
-            "id": sio.sid,
-            "user": args.server_name,
-            "model": args.model,
-            "run": args.run_name,
-            "temperature": args.temperature,
-            "top_p": args.top_p,
-            "top_k": args.top_k,
-            "print_speed": args.print_speed,
-            "length_desired": args.length_desired,
-            "random_threshold": args.random_threshold,
-            "rank_threshold": args.rank_threshold,
-            "character": args.character,
-            "hidden_before_char": args.hidden_before_char,
-            "hidden_after_char": args.hidden_after_char,
-            "wait_for_master": args.wait_for_master,
-            "sleepy_time": args.sleepy_time,
-        },
-    )
+    config = {
+        "id": sio.sid,
+        "user": args.server_name,
+        "model": args.model,
+        "run": args.run_name,
+        "temperature": args.temperature,
+        "top_p": args.top_p,
+        "top_k": args.top_k,
+        "print_speed": args.print_speed,
+        "random_threshold": args.random_threshold,
+    }
+    if args.mode == "legacy":
+        config.update(
+            {
+                "length_desired": args.length_desired,
+                "rank_threshold": args.rank_threshold,
+            }
+        )
+    else:
+        config.update(
+            {
+                "character": args.character,
+                "hidden_before_char": args.hidden_before_char,
+                "hidden_after_char": args.hidden_after_char,
+                "wait_for_master": args.wait_for_master,
+                "sleepy_time": args.sleepy_time,
+            }
+        )
+    sio.emit("config from bot", config)
 
 
 @sio.on("server sets bot config")
