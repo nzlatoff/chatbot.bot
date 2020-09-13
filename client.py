@@ -50,10 +50,11 @@ parser.add_argument(
     help="Server name used in message.",
 )
 
-parser.add_argument("--new", action="store_true", help="Use the new generate function.")
-
 parser.add_argument(
-    "--agent", action="store_true", help="""Make the bot generate text autonomously""",
+    "--mode",
+    type=str,
+    choices=["legacy", "reactive", "autonomous", "optimizer"],
+    default="autonomous",
 )
 
 parser.add_argument(
@@ -121,6 +122,14 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--sleepy_time",
+    type=int,
+    default=10,
+    help="""Time the bot sleeps between each new attempt to produce text (for
+    autonomous & optimizer modes.""",
+)
+
+parser.add_argument(
     "--rank_threshold",
     type=int,
     default=25,
@@ -179,8 +188,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-if args.agent:
-    args.new = True
 
 sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
@@ -191,7 +198,7 @@ le_model = Model(
     run_name=args.run_name,
     batch_size=args.batch_size,
     special_tokens=["<|endoftext|>"]
-    if not (args.new or args.agent)
+    if (args.mode == "legacy")
     else ["<|s|>", "<|e|>", "<|endoftext|>"],
 )
 
@@ -210,8 +217,8 @@ MESSAGES = []
 PREFIX = ""
 
 TKNS = np.array([], dtype=np.int32)
-SEP_TKNS = le_model.encode(SEPARATORS)
-SEP_TKNS_LEN = len(SEP_TKNS)
+SEP_TKNS = np.array(le_model.encode(SEPARATORS))
+SEP_TKNS_LEN = SEP_TKNS.size
 RECEIVED_MSGS = np.array([], dtype=np.int32)
 BATCH_MSG_IND = None
 TKNS_LEN_THRESHOLD = None
@@ -444,6 +451,34 @@ def extract_chars_msgs(generated, data):
         messages.append(message)
     return chars, messages
 
+
+def le_random_wall(fn):
+    rand = random.random()
+    pprint(f"(random has spoken: {rand})", off="\t", sp_bf=True)
+    if rand > args.random_threshold:
+        pprint("(le grreat rrrandom is bountiful, let's generate)", off="\t", sp_aft=True)
+        fn()
+    else:
+        pprint(
+            "(nope, the wall of random could not be passed)", off="\t", sp_aft=True
+        )
+
+
+def le_warning(has_warned):
+    if not has_warned:
+        pprint(
+            "(is generating, not answering...)\r",
+            sep="-",
+            sp_bf=True,
+            sp_aft=True,
+        )
+        has_warned = True
+        return has_warned
+
+
+def sleepy_times():
+    pprint(f"(sleepy timezz, {args.sleepy_time})", sep="-", sp_bf=True, sp_aft=True)
+    time.sleep(args.sleepy_time)
 
 # ----------------------------------------
 # generation: mass production of sentences, selection of best ones
@@ -950,7 +985,19 @@ def connect():
     print(f"{args.server_name} established connection")
     print("-" * 40)
     sio.emit("new bot", args.server_name)
-    if args.agent:
+    if args.mode == "autonomous":
+        with LeLocle:
+            TKNS = SEP_TKNS
+        has_warned = False
+        while True:
+            if not IS_GENERATING:
+                print()
+                has_warned = False
+                le_random_wall(generate_new)
+                sleepy_times()
+            else:
+                has_warned = le_warning(has_warned)
+    elif args.mode == "optimizer":
         with LeLocle:
             TKNS = SEP_TKNS
         has_warned = False
@@ -959,16 +1006,9 @@ def connect():
                 print()
                 has_warned = False
                 generate_mass()
-                time.sleep(10)
+                sleepy_times()
             else:
-                if not has_warned:
-                    pprint(
-                        "(is generating, not answering...)\r",
-                        sep="-",
-                        sp_bf=True,
-                        sp_aft=True,
-                    )
-                    has_warned = True
+                has_warned = le_warning(has_warned)
 
 
 @sio.event
@@ -1048,23 +1088,15 @@ def on_chat_message(data):
     # print(TKNS[0], type(TKNS[0]))
     # pprint(le_model.decode(TKNS)[0], sp_aft=True)
 
-    if not IS_GENERATING:
-        rand = random.random()
-        pprint(f"(random has spoken: {rand})", off="\t", sp_bf=True)
-        if rand > args.random_threshold:
-            pprint("(random is bountiful, let's generate)", off="\t", sp_aft=True)
-            if args.new:
-                generate_new()
-            elif args.agent:
-                pass
-            else:
-                generate()
+    # reactive mode, legacy or current
+    if args.mode in ("legacy", "reactive"):
+        if not IS_GENERATING:
+            if args.mode == "legacy":
+                le_random_wall(generate)
+            if args.mode == "reactive":
+                le_random_wall(generate_new)
         else:
-            pprint(
-                "(nope, the wall of random could not be passed)", off="\t", sp_aft=True
-            )
-    else:
-        pprint("(is generating, not answering...)", off="\t", sp_aft=True)
+            pprint("(is generating, not answering...)", off="\t", sp_aft=True)
 
 
 @sio.on("get bot config")
@@ -1087,6 +1119,7 @@ def send_config():
             "hidden_before_char": args.hidden_before_char,
             "hidden_after_char": args.hidden_after_char,
             "wait_for_master": args.wait_for_master,
+            "sleepy_time": args.sleepy_time,
         },
     )
 
