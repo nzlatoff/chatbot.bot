@@ -416,12 +416,12 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 
     with LeLocle:
         TKNS = TKNS[two_thirds:]
-        pprint(
-            f"(Length is now: {old_len - two_thirds}, capped to {TKNS_LEN_THRESHOLD} from now on, will also sleep for a bit while I'm at it...)",
-            sp_aft=True,
-            sep_aft="=",
-        )
-        time.sleep(sleep_for)
+    pprint(
+        f"(Length is now: {old_len - two_thirds}, capped to {TKNS_LEN_THRESHOLD} from now on, will also sleep for a bit while I'm at it...)",
+        sp_aft=True,
+        sep_aft="=",
+    )
+    time.sleep(sleep_for)
 
 
 def trim_tokens(tkns, end_pref, end_pref_after_injections):
@@ -488,7 +488,7 @@ def le_warning(has_warned):
 
 def sleepy_times():
     pprint(f"(sleepy timezz, {args.sleepy_time})", sep="-", sp_bf=True, sp_aft=True)
-    time.sleep(np.random.randint(1,args.sleepy_time + 1))
+    time.sleep(np.random.randint(1, args.sleepy_time + 1))
 
 
 def init():
@@ -543,12 +543,10 @@ def generate_mass():
         return
 
     if RECEIVED_MSGS.size > 0:
+        pprint("(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True)
+        pprint(le_model.decode(RECEIVED_MSGS[:-SEP_TKNS_LEN]), off="\t\t\t", sp_aft=True)
         with LeLocle:
             RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]  # removing last separators
-            pprint(
-                "(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True
-            )
-            pprint(le_model.decode(RECEIVED_MSGS), off="\t\t\t", sp_aft=True)
             TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
             RECEIVED_MSGS = np.array([], np.int32)
 
