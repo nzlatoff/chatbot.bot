@@ -1022,9 +1022,6 @@ def generate():
 
 @sio.event
 def connect():
-    global IS_GENERATING
-    global SEP_TKNS
-    global TKNS
     print(f"{args.server_name} established connection")
     print("-" * 40)
     sio.emit("new bot", args.server_name)
@@ -1047,6 +1044,8 @@ def disconnect():
 def reset_session():
 
     global RESETTING_SESSION
+    global BATCH_MSG_IND
+    global RECEIVED_MSGS
     global MESSAGES
     global PREFIX
     global TKNS
@@ -1059,7 +1058,9 @@ def reset_session():
     MESSAGES = []
     with LeLocle:
         PREFIX = ""
-    TKNS = np.array([], dtype=np.int32)
+        TKNS = SEP_TKNS
+        BATCH_MSG_IND = None
+        RECEIVED_MSGS = np.array([], dtype=np.int32)
     if IS_GENERATING:
         with LeLocle:
             RESETTING_SESSION = True
