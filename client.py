@@ -375,6 +375,8 @@ def select_in_batch(data, chars, messages):
 
     if BATCH_MSG_IND == -1:
         if args.bot_choice == "sampling":
+            # smallest perps given most weight
+            data["perplexities"] = 1 - data["perplexities"]
             s = data["perplexities"].sum()
             normed = np.nan_to_num(data["perplexities"] / s)
             with LeLocle:
