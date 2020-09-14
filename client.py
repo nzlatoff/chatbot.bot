@@ -665,7 +665,7 @@ def generate_mass():
             concat_perps = np.concatenate(
                 (suitors["perplexities"].flatten(), data["perplexities"].flatten())
             )
-            n = 5  # get the n smallest perps of 'em all
+            n = args.batch_size  # get the batch_size smallest perps of 'em all
             n_best_indz = np.argpartition(concat_perps, n)
             n_best_perps = concat_perps[n_best_indz][:n]
             sorted_indz = np.argsort(n_best_perps)
