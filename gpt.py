@@ -583,7 +583,6 @@ class Model:
             with various statistics (min, max, range, mean, std) see
             self._stats().
 
-
         Returns:
         --------
         a dictionary containg:
@@ -669,7 +668,7 @@ class Model:
         if isinstance(s, str):
             return self.enc.encode(s)
         elif isinstance(s, (list, tuple, np.ndarray)):
-            return np.ndarray.astype([self.enc.encode(ss) for ss in s], dtype=np.int32)
+            return np.array([np.array(self.enc.encode(ss)) for ss in s], dtype=np.int32)
 
     def decode(self, s):
         """
