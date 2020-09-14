@@ -202,6 +202,13 @@ parser.add_argument(
     (either to be directly posted, or evaluated by the master. Default: 3.""",
 )
 
+parser.add_argument(
+    "--limit_prefix",
+    type=int,
+    default=512,
+    help="""Preemptively limit the length of the prefix, to avoid OOM issues.""",
+)
+
 args = parser.parse_args()
 
 
@@ -237,7 +244,8 @@ SEP_TKNS = np.array(le_model.encode(SEPARATORS))
 SEP_TKNS_LEN = SEP_TKNS.size
 RECEIVED_MSGS = np.array([], dtype=np.int32)
 BATCH_MSG_IND = None
-TKNS_LEN_THRESHOLD = None
+
+TKNS_LEN_THRESHOLD = args.limit_prefix
 
 # ----------------------------------------
 # for printing see print_utils.py
@@ -428,7 +436,8 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
     two_thirds = int(end_pref_orig * trimming_factor)
 
     old_len = len(TKNS)
-    TKNS_LEN_THRESHOLD = old_len - 50
+    with LeLocle:
+        TKNS_LEN_THRESHOLD = old_len - 50
 
     with LeLocle:
         TKNS = TKNS[two_thirds:]
