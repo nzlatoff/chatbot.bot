@@ -442,7 +442,7 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
     with LeLocle:
         TKNS = TKNS[two_thirds:]
     pprint(
-        f"(Length is now: {old_len - two_thirds}, capped to {TKNS_LEN_THRESHOLD} from now on, will also sleep for a bit while I'm at it...)",
+        f"(Length was {old_len}, is now: {old_len - two_thirds}, capped to {TKNS_LEN_THRESHOLD} from now on, will also sleep for a bit while I'm at it...)",
         sp_aft=True,
         sep_aft="=",
     )
