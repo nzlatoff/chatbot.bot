@@ -228,7 +228,7 @@ le_model = Model(
 # ----------------------------------------
 # all the lovely globals
 
-RESETTING_SESSION = False
+RESETTING = False
 IS_GENERATING = False
 
 REPLIQUE_RE = regex.compile("<\|s\|>\n(.*?)\n+<\|e\|>", regex.DOTALL)
@@ -258,10 +258,10 @@ print_config(args)
 
 def reset_gen():
 
-    global RESETTING_SESSION
     global RECEIVED_MSGS
     global BATCH_MSG_IND
     global IS_GENERATING
+    global RESETTING
     global MESSAGES
     global PREFIX
     global TKNS
@@ -270,9 +270,9 @@ def reset_gen():
     MESSAGES = []
     with LeLocle:
         RECEIVED_MSGS = np.array([], dtype=np.int32)
-        RESETTING_SESSION = False
         IS_GENERATING = False
         BATCH_MSG_IND = None
+        RESETTING = False
         TKNS = SEP_TKNS
         PREFIX = ""
     print(f"generation interrupted")
@@ -285,7 +285,7 @@ def reset_gen():
 def fancy_typing(char, message):
     if args.print_speed > 0:
         for i in range(len(message) + 1):
-            if RESETTING_SESSION:
+            if RESETTING:
                 return False
             # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
             send_typing(
@@ -554,10 +554,10 @@ def init():
 
 def generate_mass():
 
-    global RESETTING_SESSION
     global IS_GENERATING
     global RECEIVED_MSGS
     global BATCH_MSG_IND
+    global RESETTING
     global TKNS
 
     with LeLocle:
@@ -567,7 +567,7 @@ def generate_mass():
         {"id": sio.sid, "character": "", "message": "", "user": args.server_name,}
     )
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     if RECEIVED_MSGS.size > 0:
@@ -580,12 +580,12 @@ def generate_mass():
             TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
             RECEIVED_MSGS = np.array([], np.int32)
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     end_pref_orig, end_pref, end_pref_after_injections = preprocess_prefix()
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     suitors = {
@@ -597,6 +597,10 @@ def generate_mass():
 
     patience = 0
     while patience < args.patience:
+
+        if RESETTING:
+            return reset_gen()
+
         # first produce a small bit avoiding the end token
         try:
             data = le_model.gen_avoiding(
@@ -610,13 +614,7 @@ def generate_mass():
             )
 
         except Exception as e:
-            if RESETTING_SESSION:
-                return reset_gen()
             handle_error("gen_avoiding", end_pref_orig, e)
-            if RESETTING_SESSION:
-                return reset_gen()
-            with LeLocle:
-                IS_GENERATING = False
             return reset_gen()
 
         pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
@@ -625,7 +623,7 @@ def generate_mass():
             pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t")
             pprint("*", off="\t\t")
 
-        if RESETTING_SESSION:
+        if RESETTING:
             return reset_gen()
 
         # then produce the rest, until the end token
@@ -643,13 +641,7 @@ def generate_mass():
             )
 
         except Exception as e:
-            if RESETTING_SESSION:
-                return reset_gen()
             handle_error("gen_until", end_pref_orig, e)
-            if RESETTING_SESSION:
-                return reset_gen()
-            with LeLocle:
-                IS_GENERATING = False
             return reset_gen()
 
         if suitors["perplexities"].size == 0:
@@ -659,12 +651,12 @@ def generate_mass():
 
             generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
 
-            if RESETTING_SESSION:
+            if RESETTING:
                 return reset_gen()
 
             pprint("(generated)", off="\t", sep="-", sp_bf=True, sp_aft=True)
 
-            if RESETTING_SESSION:
+            if RESETTING:
                 return reset_gen()
 
             chars, messages = extract_chars_msgs(generated, data)
@@ -672,7 +664,7 @@ def generate_mass():
             suitors["chars"] = chars
             suitors["messages"] = messages
 
-            if RESETTING_SESSION:
+            if RESETTING:
                 return reset_gen()
 
         else:
@@ -694,12 +686,12 @@ def generate_mass():
 
             generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
 
-            if RESETTING_SESSION:
+            if RESETTING:
                 return reset_gen()
 
             pprint("(generated)", off="\t", sep="-", sp_bf=True, sp_aft=True)
 
-            if RESETTING_SESSION:
+            if RESETTING:
                 return reset_gen()
 
             chars, messages = extract_chars_msgs(generated, data)
@@ -725,7 +717,7 @@ def generate_mass():
                 pprint(f"(perp: {suitors['perplexities'][i].item()})", off="\t")
                 pprint("*", off="\t")
 
-            if RESETTING_SESSION:
+            if RESETTING:
                 return reset_gen()
 
             if patience < args.patience:
@@ -754,7 +746,7 @@ def generate_mass():
     i = 0
     print()
     while BATCH_MSG_IND == None:
-        if RESETTING_SESSION:
+        if RESETTING:
             return reset_gen()
         print(
             f"\t(waiting for batch choice ({args.wait_for_master - i}))", end="     \r"
@@ -766,18 +758,18 @@ def generate_mass():
             with LeLocle:
                 BATCH_MSG_IND = -1
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     char, message = select_in_batch(suitors, suitors["chars"], suitors["messages"])
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     if not fancy_typing(char, message):
         return reset_gen()
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     send_message({"character": char, "message": message, "user": args.server_name})
@@ -795,10 +787,10 @@ def generate_mass():
 def generate_new():
 
     global TKNS_LEN_THRESHOLD
-    global RESETTING_SESSION
     global IS_GENERATING
     global RECEIVED_MSGS
     global BATCH_MSG_IND
+    global RESETTING
     global TKNS
 
     with LeLocle:
@@ -815,7 +807,7 @@ def generate_new():
         }
     )
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     if RECEIVED_MSGS.size > 0:
@@ -838,12 +830,12 @@ def generate_new():
         with LeLocle:
             TKNS = TKNS[-TKNS_LEN_THRESHOLD:]
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     end_pref_orig, end_pref, end_pref_after_injections = preprocess_prefix()
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     # first produce a small bit avoiding the end token
@@ -859,13 +851,7 @@ def generate_new():
         )
 
     except Exception as e:
-        if RESETTING_SESSION:
-            return reset_gen()
         handle_error("gen_avoiding", end_pref_orig, e)
-        if RESETTING_SESSION:
-            return reset_gen()
-        with LeLocle:
-            IS_GENERATING = False
         return reset_gen()
 
     send_entrails(
@@ -882,7 +868,7 @@ def generate_new():
         pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t")
         pprint("*", off="\t\t")
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     # then produce the rest, until the end token
@@ -900,13 +886,7 @@ def generate_new():
         )
 
     except Exception as e:
-        if RESETTING_SESSION:
-            return reset_gen()
         handle_error("gen_until", end_pref_orig, e)
-        if RESETTING_SESSION:
-            return reset_gen()
-        with LeLocle:
-            IS_GENERATING = False
         return reset_gen()
 
     # sort the sequences
@@ -916,17 +896,17 @@ def generate_new():
 
     generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     pprint("(generated)", off="\t", sep="-", sp_bf=True, sp_aft=True)
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     chars, messages = extract_chars_msgs(generated, data)
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     send_batch(
@@ -943,7 +923,7 @@ def generate_new():
     i = 0
     print()
     while BATCH_MSG_IND == None:
-        if RESETTING_SESSION:
+        if RESETTING:
             return reset_gen()
         print(
             f"\t(waiting for batch choice ({args.wait_for_master - i}))", end="     \r"
@@ -955,7 +935,7 @@ def generate_new():
             with LeLocle:
                 BATCH_MSG_IND = -1
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     char, message = select_in_batch(data, chars, messages)
@@ -965,11 +945,11 @@ def generate_new():
 
     send_message({"character": char, "message": message, "user": args.server_name})
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     with LeLocle:
-        if not RESETTING_SESSION:
+        if not RESETTING:
             TKNS = data["tokens"][BATCH_MSG_IND]
             BATCH_MSG_IND = None
             IS_GENERATING = False
@@ -987,7 +967,7 @@ def generate():
 
     IS_GENERATING = True
 
-    if RESETTING_SESSION:
+    if RESETTING:
         return reset_gen()
 
     # print("-"*40)
@@ -1056,7 +1036,7 @@ def generate():
 
             fancy_typing(char, message)
 
-            if RESETTING_SESSION:
+            if RESETTING:
                 return reset_gen()
 
             send_message(
@@ -1100,9 +1080,9 @@ def disconnect():
 @sio.on("erase messages")
 def reset_session():
 
-    global RESETTING_SESSION
     global BATCH_MSG_IND
     global RECEIVED_MSGS
+    global RESETTING
     global MESSAGES
     global PREFIX
     global TKNS
@@ -1114,7 +1094,7 @@ def reset_session():
 
     if IS_GENERATING:
         with LeLocle:
-            RESETTING_SESSION = True
+            RESETTING = True
     else:
         MESSAGES = []
         with LeLocle:
