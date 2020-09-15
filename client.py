@@ -311,7 +311,7 @@ def preprocess_prefix():
 
     pprint("(tkns)", sep="-", off="\t\t\t", sp_bf=True)
     pprint(str(TKNS), off="\t\t\t", sp_aft=True)
-    pprint(f"length: {end_pref_orig}", off="\t\t\t", sp_aft=True)
+    pprint(f"(length: {end_pref_orig})", off="\t\t\t", sp_aft=True)
 
     pprint("(prefix)", sp_bf=True, off="\t\t\t", sp_aft=True)
     pprint(le_model.decode(TKNS), off="\t\t\t", sp_aft=True)
@@ -483,7 +483,8 @@ def extract_chars_msgs(generated, data):
 
         pprint(char, off="\t")
         pprint(message, off="\t")
-        pprint(f"(perp: {data['perplexities'][i].item()})", off="\t", sep_aft="*")
+        pprint(f"(perp: {data['perplexities'][i].item()})", off="\t")
+        pprint("*", off="\t")
 
         chars.append(char)
         messages.append(message)
@@ -569,7 +570,9 @@ def generate_mass():
 
     if RECEIVED_MSGS.size > 0:
         pprint("(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True)
-        pprint(le_model.decode(RECEIVED_MSGS[:-SEP_TKNS_LEN]), off="\t\t\t", sp_aft=True)
+        pprint(
+            le_model.decode(RECEIVED_MSGS[:-SEP_TKNS_LEN]), off="\t\t\t", sp_aft=True
+        )
         with LeLocle:
             RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]  # removing last separators
             TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
@@ -617,7 +620,8 @@ def generate_mass():
         pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
         for i, tkn in enumerate(data["tokens"]):
             pprint(le_model.decode(tkn[end_pref_orig:]).strip(), off="\t\t")
-            pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t", sep_aft="*")
+            pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t")
+            pprint("*", off="\t\t")
 
         if RESETTING_SESSION:
             return reset_gen()
@@ -716,11 +720,8 @@ def generate_mass():
             for i in range(n):
                 pprint(suitors["chars"][i], off="\t")
                 pprint(suitors["messages"][i], off="\t")
-                pprint(
-                    f"(perp: {suitors['perplexities'][i].item()})",
-                    off="\t",
-                    sep_aft="*",
-                )
+                pprint(f"(perp: {suitors['perplexities'][i].item()})", off="\t")
+                pprint("*", off="\t")
 
             if RESETTING_SESSION:
                 return reset_gen()
@@ -876,7 +877,8 @@ def generate_new():
     pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
     for i, tkn in enumerate(data["tokens"]):
         pprint(le_model.decode(tkn[end_pref_orig:]).strip(), off="\t\t")
-        pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t", sep_aft="*")
+        pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t")
+        pprint("*", off="\t\t")
 
     if RESETTING_SESSION:
         return reset_gen()
