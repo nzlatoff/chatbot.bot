@@ -370,6 +370,7 @@ class Model:
             while i < sanity_limit and not all(
                 s["index"] is not None for s in batch_data
             ):
+                print(f"in gen until:{i+1}", end="")
                 tkns, _ = self.sess.run(
                     self.output,
                     feed_dict={
