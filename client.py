@@ -383,12 +383,12 @@ def select_in_batch(data, chars, messages):
     if BATCH_MSG_IND == -1:
         if args.bot_choice == "sampling":
             # smallest perps given most weight
-            data["perplexities"] = 1 - data["perplexities"]
-            s = data["perplexities"].sum()
-            normed = np.nan_to_num(data["perplexities"] / s)
+            invert_perps = 1 - data["perplexities"]
+            s = invert_perps.sum()
+            normed = np.nan_to_num(invert_perps / s)
             with LeLocle:
                 BATCH_MSG_IND = np.random.choice(
-                    data["perplexities"].shape[0], 1, p=normed.flatten()
+                    invert_perps.shape[0], 1, p=normed.flatten()
                 ).item()
         elif args.bot_choice == "min":
             with LeLocle:
