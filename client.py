@@ -1123,6 +1123,7 @@ def reset_session():
         print("not generating, resetting variables")
         print()
         print("=" * 40)
+        print()
 
 
 @sio.on("received")
@@ -1208,9 +1209,7 @@ def send_config():
         )
         if args.mode == "optimizer":
             config.update(
-                {
-                    "patience": args.patience,
-                }
+                {"patience": args.patience,}
             )
     sio.emit("config from bot", config)
 
