@@ -278,6 +278,8 @@ def reset_gen():
     print(f"generation interrupted")
     print()
     print("=" * 40)
+    print()
+
 
 
 def fancy_typing(char, message):
