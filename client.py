@@ -281,6 +281,26 @@ def reset_gen():
     print()
 
 
+def index_from_master():
+
+    global BATCH_MSG_IND
+
+    i = 0
+    print()
+    while BATCH_MSG_IND == None:
+        if RESETTING:
+            return False
+        print(
+            f"\t(waiting for batch choice ({args.wait_for_master - i}))", end="     \r"
+        )
+        time.sleep(1)
+        i += 1
+        if i > args.wait_for_master + 2:
+            print("\twaited enough, bot taking back control")
+            with LeLocle:
+                BATCH_MSG_IND = -1
+    return True
+
 
 def fancy_typing(char, message):
     if args.print_speed > 0:
@@ -743,20 +763,8 @@ def generate_mass():
         }
     )
 
-    i = 0
-    print()
-    while BATCH_MSG_IND == None:
-        if RESETTING:
-            return reset_gen()
-        print(
-            f"\t(waiting for batch choice ({args.wait_for_master - i}))", end="     \r"
-        )
-        time.sleep(1)
-        i += 1
-        if i > args.wait_for_master + 2:
-            print("\twaited enough, bot taking back control")
-            with LeLocle:
-                BATCH_MSG_IND = -1
+    if not index_from_master():
+        return reset_gen()
 
     if RESETTING:
         return reset_gen()
@@ -920,20 +928,8 @@ def generate_new():
         }
     )
 
-    i = 0
-    print()
-    while BATCH_MSG_IND == None:
-        if RESETTING:
-            return reset_gen()
-        print(
-            f"\t(waiting for batch choice ({args.wait_for_master - i}))", end="     \r"
-        )
-        time.sleep(1)
-        i += 1
-        if i > args.wait_for_master + 2:
-            print("\twaited enough, bot taking back control")
-            with LeLocle:
-                BATCH_MSG_IND = -1
+    if not index_from_master():
+        return reset_gen()
 
     if RESETTING:
         return reset_gen()
