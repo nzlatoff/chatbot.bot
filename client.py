@@ -23,6 +23,16 @@ def float_range(x):
     return x
 
 
+def positive_float(x):
+    try:
+        x = float(x)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{x} not a floating-point literal")
+    if x <= 0:
+        raise argparse.ArgumentTypeError(f"{x} must be greater than 0.")
+    return x
+
+
 parser = argparse.ArgumentParser(
     description="""
     """,
@@ -123,7 +133,7 @@ parser.add_argument(
 
 parser.add_argument(
     "--sleepy_time",
-    type=int,
+    type=positive_float,
     default=10,
     help="""The most time the bot sleeps between each new attempt to produce
     text (for autonomous & optimizer modes. A random number is generated,
@@ -534,8 +544,12 @@ def le_warning(has_warned):
 
 
 def sleepy_times():
-    pprint(f"(sleepy timezz, {args.sleepy_time})", sep="-", sp_bf=True, sp_aft=True)
-    time.sleep(np.random.randint(1, args.sleepy_time + 1))
+    r = np.random.randint(1, args.sleepy_time + 1)
+    pprint(
+        f"(sleepy timezz: rrandom gave me {r} second to sleep.)", sep="-", sp_bf=True,
+    )
+    pprint(f"(The max could have been:  {args.sleepy_time})", sp_aft=True)
+    time.sleep(r)
 
 
 def init():
@@ -1149,8 +1163,10 @@ def on_chat_message(data):
         if not IS_GENERATING:
             if args.mode == "legacy":
                 le_random_wall(generate)
+                sleepy_times()
             if args.mode == "reactive":
                 le_random_wall(generate_new)
+                sleepy_times()
         else:
             pprint("(is generating, not answering...)", off="\t", sp_aft=True)
 
