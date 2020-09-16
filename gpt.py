@@ -213,7 +213,7 @@ class Model:
         until="<|e|>",
         exclude_until=True,
         chunk_length=5,
-        sanity_limit=200,
+        sanity_limit=100,
         temperature=1,
         top_k=0,
         top_p=0.0,
