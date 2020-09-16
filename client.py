@@ -1259,7 +1259,7 @@ def send_entrails(data):
 
 def send_three_dots():
     send_typing(
-        {"id": sio.sid, "character": "", "message": "...", "user": args.server_name,}
+        {"id": sio.sid, "character": "", "message": "(...)", "user": args.server_name,}
     )
 
 
