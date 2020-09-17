@@ -315,30 +315,29 @@ def index_from_master():
 
 def fancy_typing(char, message, tkns=None):
     pprint(f"(Awright, {args.server_name} sending les tokens to humans...)", sep="-", sp_bf=True)
-    if args.print_speed > 0:
-        print()
-        total = len(message) + 1
-        prev = ""
-        for i in range(total):
-            if RESETTING:
-                return False
-            if tkns is not None:
-                # print(" " * 80 + "\r", end="")
-                msg = f"{tkns[:i]}".split("\n")
-                current = msg[-1] + "\r"
-                if len(current) < len(prev):
-                    print()
-                print(msg[-1] + "\r", end="")
-                prev = current
-            send_typing(
-                {
-                    "id": sio.sid,
-                    "character": char,
-                    "message": message[:i],
-                    "user": args.server_name,
-                }
-            )
-            time.sleep(args.print_speed)
+    print()
+    total = len(message) + 1
+    prev = ""
+    for i in range(total):
+        if RESETTING:
+            return False
+        if tkns is not None:
+            # print(" " * 80 + "\r", end="")
+            msg = f"{tkns[:i]}".split("\n")
+            current = msg[-1] + "\r"
+            if len(current) < len(prev):
+                print()
+            print(msg[-1] + "\r", end="")
+            prev = current
+        send_typing(
+            {
+                "id": sio.sid,
+                "character": char,
+                "message": message[:i],
+                "user": args.server_name,
+            }
+        )
+        time.sleep(args.print_speed)
     print()
     print()
     return True
@@ -1241,7 +1240,11 @@ def set_config(data):
             if k in {"user", "id", "run", "model"}:
                 continue
             try:
-                v = type(args.__getattribute__(k))(v)
+                if k in  {"sleepy_time", "print_speed"}:
+                    v = type(args.__getattribute__(k))(v)
+                    v = v if v > 0 else 0.0001
+                else:
+                    v = type(args.__getattribute__(k))(v)
                 print(f"{k}: {v}")
                 args.__setattr__(k, v)
             except:
