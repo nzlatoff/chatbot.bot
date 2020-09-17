@@ -1,4 +1,7 @@
 import textwrap
+import blessed
+
+term = blessed.Terminal()
 
 def print_underlined(msg):
     print(msg)
