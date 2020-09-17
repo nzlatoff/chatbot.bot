@@ -576,6 +576,8 @@ def init():
         has_warned = False
         while True:
             if not IS_GENERATING:
+                with LeLocle:
+                    IS_GENERATING = True
                 print()
                 has_warned = False
                 le_random_wall(generate_new)
@@ -588,6 +590,8 @@ def init():
         has_warned = False
         while True:
             if not IS_GENERATING:
+                with LeLocle:
+                    IS_GENERATING = True
                 print()
                 has_warned = False
                 generate_mass()
@@ -607,9 +611,6 @@ def generate_mass():
     global BATCH_MSG_IND
     global RESETTING
     global TKNS
-
-    with LeLocle:
-        IS_GENERATING = True
 
     send_typing(
         {"id": sio.sid, "character": "", "message": "", "user": args.server_name,}
@@ -829,9 +830,6 @@ def generate_new():
     global RESETTING
     global TKNS
 
-    with LeLocle:
-        IS_GENERATING = True
-
     send_typing(
         {"id": sio.sid, "character": "", "message": "", "user": args.server_name,}
     )
@@ -990,8 +988,6 @@ def generate():
     global IS_GENERATING
     global PREFIX
     global START
-
-    IS_GENERATING = True
 
     if RESETTING:
         return reset_gen()
@@ -1177,6 +1173,8 @@ def on_chat_message(data):
     # reactive mode, legacy or current
     if args.mode in ("legacy", "reactive"):
         if not IS_GENERATING:
+            with LeLocle:
+                IS_GENERATING = True
             if args.mode == "legacy":
                 le_random_wall(generate)
                 sleepy_times()
