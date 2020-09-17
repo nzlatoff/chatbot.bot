@@ -215,8 +215,9 @@ parser.add_argument(
 parser.add_argument(
     "--limit_prefix",
     type=int,
-    default=512,
-    help="""Preemptively limit the length of the prefix, to avoid OOM issues.""",
+    default=200,
+    help="""Preemptively limit the length of the prefix, to avoid OOM issues.
+    Defaults to 200.""",
 )
 
 args = parser.parse_args()
@@ -312,12 +313,23 @@ def index_from_master():
     return True
 
 
-def fancy_typing(char, message):
+def fancy_typing(char, message, tkns=None):
+    pprint(f"(Awright, {args.server_name} sending les tokens to humans...)", sep="-", sp_bf=True)
     if args.print_speed > 0:
-        for i in range(len(message) + 1):
+        print()
+        total = len(message) + 1
+        prev = ""
+        for i in range(total):
             if RESETTING:
                 return False
-            # print({ "id": sio.sid, "character": char, "message": # message[:i], "user": args.server_name})
+            if tkns is not None:
+                # print(" " * 80 + "\r", end="")
+                msg = f"{tkns[:i]}".split("\n")
+                current = msg[-1] + "\r"
+                if len(current) < len(prev):
+                    print()
+                print(msg[-1] + "\r", end="")
+                prev = current
             send_typing(
                 {
                     "id": sio.sid,
@@ -327,6 +339,8 @@ def fancy_typing(char, message):
                 }
             )
             time.sleep(args.print_speed)
+    print()
+    print()
     return True
 
 
@@ -484,22 +498,19 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 def trim_tokens(tkns, end_pref, end_pref_after_injections):
     if args.character:
         generated = []
+        trimmed = []
         for tkns in tkns:
+            tt = tkns[end_pref_after_injections:]
+            trimmed.append(tt)
             tmp_seq = le_model.decode(
-                np.concatenate(
-                    (
-                        le_model.encode(f"{args.character}\n"),
-                        tkns[end_pref_after_injections:],
-                    )
-                )
+                np.concatenate((le_model.encode(f"{args.character}\n"), tt))
             )
             tmp_seq = tmp_seq.strip()
             generated.append(tmp_seq)
     else:
-        generated = [
-            seq.strip() for seq in le_model.decode([tkns[end_pref:] for tkns in tkns])
-        ]
-    return generated
+        trimmed = [tkns[end_pref:] for tkns in tkns]
+        generated = [seq.strip() for seq in le_model.decode(trimmed)]
+    return generated, trimmed
 
 
 def extract_chars_msgs(generated, data):
@@ -546,7 +557,9 @@ def le_warning(has_warned):
 def sleepy_times():
     r = np.random.randint(1, args.sleepy_time + 1)
     pprint(
-        f"(sleepy timezz: rrandom gave me {r} second to sleep.)", sep="-", sp_bf=True,
+        f"(sleepy timezz for {args.server_name}: rrandom gave me {r} second(s) to sleep.)",
+        sep="-",
+        sp_bf=True,
     )
     pprint(f"(The max could have been:  {args.sleepy_time})", sp_aft=True)
     time.sleep(r)
@@ -683,7 +696,7 @@ def generate_mass():
             suitors["perplexities"] = data["perplexities"]
             suitors["tokens"] = data["tokens"]
 
-            generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
+            generated, data["trimmed"] = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
 
             if RESETTING:
                 return reset_gen()
@@ -718,7 +731,7 @@ def generate_mass():
             concat_seqs = np.array(suitors["tokens"] + data["tokens"])
             suitors["tokens"] = list(concat_seqs[n_best_indz][:n][sorted_indz])
 
-            generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
+            generated, data["trimmed"] = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
 
             if RESETTING:
                 return reset_gen()
@@ -916,7 +929,9 @@ def generate_new():
     data["perplexities"] = data["perplexities"][sorted_indz]
     data["tokens"] = np.asarray(data["tokens"])[sorted_indz]
 
-    generated = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
+    generated, data["trimmed"] = trim_tokens(
+        data["tokens"], end_pref, end_pref_after_injections
+    )
 
     if RESETTING:
         return reset_gen()
@@ -950,7 +965,7 @@ def generate_new():
 
     char, message = select_in_batch(data, chars, messages)
 
-    if not fancy_typing(char, message):
+    if not fancy_typing(char, message, data["trimmed"][BATCH_MSG_IND]):
         return reset_gen()
 
     send_message({"character": char, "message": message, "user": args.server_name})
@@ -1237,13 +1252,13 @@ def set_message_choice(data):
             BATCH_MSG_IND = data["choice"]
         if BATCH_MSG_IND == -1:
             pprint(
-                f"received batch choice: '-1' received, the bot will choose",
+                f"(received batch choice: '-1' received, the bot will choose)",
                 sep="-",
                 off="\t",
             )
         else:
             pprint(
-                f"received batch choice: message chosen: {BATCH_MSG_IND}",
+                f"(received batch choice: message chosen: {BATCH_MSG_IND})",
                 sep="-",
                 off="\t",
             )
