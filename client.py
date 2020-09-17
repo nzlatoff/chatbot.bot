@@ -878,6 +878,7 @@ def generate_new():
 
     # first produce a small bit avoiding the end token
     try:
+        pprint("(starting generation, making sure we don't finish early)", off="\t\t", sep="-", sp_bf=True)
         data = le_model.gen_avoiding(
             prefix=TKNS,
             avoiding=le_model.encode("<|e|>"),
@@ -911,7 +912,7 @@ def generate_new():
 
     # then produce the rest, until the end token
     try:
-        pprint("(gen until)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+        pprint("(generation proper, until reaching the end of each answer)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
         data = le_model.gen_until(
             prefix=data["tokens"],
             until="<|s|>",
@@ -927,6 +928,8 @@ def generate_new():
     except Exception as e:
         handle_error("gen_until", end_pref_orig, e)
         return reset_gen()
+
+    pprint("(done!)", off="\t\t", sp_bf=True, sp_aft=True)
 
     # sort the sequences
     sorted_indz = np.argsort(data["perplexities"], axis=0).flatten()
