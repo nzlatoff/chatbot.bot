@@ -444,7 +444,7 @@ def select_in_batch(data, chars, messages):
         char = chars[BATCH_MSG_IND]
         message = messages[BATCH_MSG_IND]
         pprint(
-            f"({args.server_name} sending: bot's choice)",
+            f"({args.server_name} sending its own choice, message: {BATCH_MSG_IND+1})",
             sep="-",
             sp_bf=True,
             sp_aft=True,
@@ -455,7 +455,7 @@ def select_in_batch(data, chars, messages):
     else:
         char = chars[BATCH_MSG_IND]
         message = messages[BATCH_MSG_IND]
-        pprint(f"({args.server_name} sent: master's choice)", sep="-", sp_bf=True)
+        pprint(f"({args.server_name} sending le master's choice)", sep="-", sp_bf=True)
         pprint(char)
         pprint(message)
         pprint(f"(perp: {data['perplexities'][BATCH_MSG_IND].item()})")
@@ -900,7 +900,7 @@ def generate_new():
         }
     )
 
-    pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+    pprint("(done!)", off="\t\t", sp_aft=True)
     for i, tkn in enumerate(data["tokens"]):
         pprint(le_model.decode(tkn[end_pref_orig:]).strip(), off="\t\t")
         pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t")
@@ -911,6 +911,7 @@ def generate_new():
 
     # then produce the rest, until the end token
     try:
+        pprint("(gen until)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
         data = le_model.gen_until(
             prefix=data["tokens"],
             until="<|s|>",

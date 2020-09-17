@@ -1,6 +1,7 @@
 from tensorflow.core.protobuf import rewriter_config_pb2
 from collections import defaultdict
 from operator import itemgetter
+from print_utils import term
 import tensorflow as tf
 import numpy as np
 import encoder_hug
@@ -325,8 +326,11 @@ class Model:
                     chunk_length=chunk_length,
                     exclude_until=exclude_until,
                 )
+                msg = f"\t\t{tkns[:, -chunk_length:]}".replace("\n", "")[:term.width - 16]
+                print(msg)
                 context_tkns = tkns
                 i += 1
+            print()
             tkns = [t[: batch_data[i]["index"]] for i, t in enumerate(tkns)]
             tkns = tkns if not self.reverse else [t[::-1] for t in tkns]
             logits = [l[: batch_data[i]["index"]] for i, l in enumerate(logits)]
@@ -370,7 +374,6 @@ class Model:
             while i < sanity_limit and not all(
                 s["index"] is not None for s in batch_data
             ):
-                print(f"in gen until:{i+1}", end="")
                 tkns, _ = self.sess.run(
                     self.output,
                     feed_dict={
