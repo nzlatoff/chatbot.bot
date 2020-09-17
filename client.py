@@ -482,8 +482,9 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
     two_thirds = int(end_pref_orig * trimming_factor)
 
     old_len = len(TKNS)
+    next_len = old_len - 50
     with LeLocle:
-        TKNS_LEN_THRESHOLD = old_len - 50
+        TKNS_LEN_THRESHOLD = next_len if next_len > 10 else old_len
 
     with LeLocle:
         TKNS = TKNS[two_thirds:]
