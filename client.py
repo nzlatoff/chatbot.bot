@@ -803,6 +803,11 @@ def generate_mass():
     if RESETTING:
         return reset_gen()
 
+    send_ind()
+
+    if RESETTING:
+        return reset_gen()
+
     if not fancy_typing(char, message):
         return reset_gen()
 
@@ -964,6 +969,11 @@ def generate_new():
 
     char, message = select_in_batch(data, chars, messages)
 
+    if RESETTING:
+        return reset_gen()
+
+    send_ind()
+
     if not fancy_typing(char, message, data["trimmed"][BATCH_MSG_IND]):
         return reset_gen()
 
@@ -1119,6 +1129,7 @@ def reset_session():
             RESETTING = True
     else:
         MESSAGES = []
+        send_three_dots()
         with LeLocle:
             RECEIVED_MSGS = np.array([], dtype=np.int32)
             BATCH_MSG_IND = None
@@ -1275,6 +1286,10 @@ def send_three_dots():
     send_typing(
         {"id": sio.sid, "character": "", "message": "(...)", "user": args.server_name,}
     )
+
+
+def send_ind():
+    sio.emit("bot confirms choice", {"id": sio.sid, "choice": BATCH_MSG_IND,})
 
 
 def send_batch(data):
