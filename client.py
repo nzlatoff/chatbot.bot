@@ -555,7 +555,7 @@ def le_warning(has_warned):
 
 
 def sleepy_times():
-    r = np.random.randint(1, args.sleepy_time + 1)
+    r = np.random.uniform(1, 1 + args.sleepy_time)
     pprint(
         f"(sleepy timezz for {args.server_name}: rrandom gave me {r} second(s) to sleep.)",
         sep="-",
