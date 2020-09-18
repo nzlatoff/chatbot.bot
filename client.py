@@ -313,22 +313,51 @@ def index_from_master():
     return True
 
 
-def fancy_typing(char, message, tkns=None):
-    pprint(f"(Awright, {args.server_name} sending les tokens to humans...)", sep="-", sp_bf=True)
-    print()
-    total = len(message) + 1
+def fancy_tok_typing(tkns):
+    pprint(f"(Alright, {args.server_name} sending les tokens to humans...)", sep="-", sp_bf=True, sp_aft=True)
+    tkns = tkns[:-4] # no sep tkns
+    total = len(tkns) + 1
+    nl_ind = np.where(tkns == 201)[0]
+    if nl_ind.size == 0:
+        nl_ind = 1
+    else:
+        nl_ind = nl_ind[0]
     prev = ""
+    for i in range(nl_ind, total):
+        if RESETTING:
+            return False
+        if nl_ind == 1:
+            char = ""
+            message = le_model.decode(tkns[:i])
+        else:
+            char = le_model.decode(tkns[:nl_ind])
+            message = le_model.decode(tkns[nl_ind+1:i+2])
+        msg = f"{tkns[:i+2]}".split("\n")
+        current = msg[-1] + "\r"
+        if len(current) < len(prev):
+            print()
+        print(msg[-1] + "\r", end="")
+        prev = current
+        send_typing(
+            {
+                "id": sio.sid,
+                "character": char,
+                "message": message,
+                "user": args.server_name,
+            }
+        )
+        time.sleep(args.print_speed)
+    print()
+    print()
+    return True
+
+
+def fancy_typing(char, message):
+    pprint(f"(Awright, {args.server_name} sending le message to humans...)", sep="-", sp_bf=True, sp_aft=True)
+    total = len(message) + 1
     for i in range(total):
         if RESETTING:
             return False
-        if tkns is not None:
-            # print(" " * 80 + "\r", end="")
-            msg = f"{tkns[:i]}".split("\n")
-            current = msg[-1] + "\r"
-            if len(current) < len(prev):
-                print()
-            print(msg[-1] + "\r", end="")
-            prev = current
         send_typing(
             {
                 "id": sio.sid,
@@ -807,7 +836,7 @@ def generate_mass():
     if RESETTING:
         return reset_gen()
 
-    if not fancy_typing(char, message):
+    if not fancy_tok_typing(data["trimmed"][BATCH_MSG_IND]):
         return reset_gen()
 
     if RESETTING:
@@ -977,7 +1006,7 @@ def generate_new():
 
     send_ind()
 
-    if not fancy_typing(char, message, data["trimmed"][BATCH_MSG_IND]):
+    if not fancy_tok_typing(data["trimmed"][BATCH_MSG_IND]):
         return reset_gen()
 
     send_message({"character": char, "message": message, "user": args.server_name})
