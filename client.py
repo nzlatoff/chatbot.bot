@@ -848,7 +848,8 @@ def generate_mass():
     send_message({"character": char, "message": message, "user": args.server_name})
 
     with LeLocle:
-        TKNS = suitors["tokens"][BATCH_MSG_IND]
+        if not RESETTING:
+            TKNS = suitors["tokens"][BATCH_MSG_IND]
         BATCH_MSG_IND = None
         IS_GENERATING = False
 
@@ -1020,8 +1021,8 @@ def generate_new():
     with LeLocle:
         if not RESETTING:
             TKNS = data["tokens"][BATCH_MSG_IND]
-            BATCH_MSG_IND = None
-            IS_GENERATING = False
+        BATCH_MSG_IND = None
+        IS_GENERATING = False
 
 
 # ----------------------------------------
