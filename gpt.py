@@ -330,7 +330,6 @@ class Model:
                 print(msg)
                 context_tkns = tkns
                 i += 1
-            print()
             tkns = [t[: batch_data[i]["index"]] for i, t in enumerate(tkns)]
             tkns = tkns if not self.reverse else [t[::-1] for t in tkns]
             logits = [l[: batch_data[i]["index"]] for i, l in enumerate(logits)]
