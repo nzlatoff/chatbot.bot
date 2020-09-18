@@ -1297,17 +1297,10 @@ def set_message_choice(data):
         with LeLocle:
             BATCH_MSG_IND = data["choice"]
         if BATCH_MSG_IND == -1:
-            pprint(
-                f"(received batch choice: '-1' received, the bot will choose)",
-                sep="-",
-                off="\t",
-            )
+            msg = f"(received batch choice: '-1' received, the bot will choose)"
         else:
-            pprint(
-                f"(received batch choice: message chosen: {BATCH_MSG_IND})",
-                sep="-",
-                off="\t",
-            )
+            msg = f"(received batch choice: message chosen: {BATCH_MSG_IND})"
+        pprint(msg, sep="-", off="\t", sp_aft=True)
 
 
 def send_typing(data):
