@@ -705,6 +705,7 @@ def generate_mass():
 
         # then produce the rest, until the end token
         try:
+            pprint("(generation proper, until reaching the end of each answer)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
             data = le_model.gen_until(
                 prefix=data["tokens"],
                 until="<|s|>",
@@ -720,6 +721,8 @@ def generate_mass():
         except Exception as e:
             handle_error("gen_until", end_pref_orig, e)
             return reset_gen()
+
+        pprint("(done!)", off="\t\t", sp_bf=True, sp_aft=True)
 
         if suitors["perplexities"].size == 0:
 
