@@ -622,7 +622,7 @@ def init():
                     IS_GENERATING = True
                 print()
                 has_warned = False
-                generate_mass()
+                le_random_wall(generate_mass)
                 sleepy_times()
             else:
                 has_warned = le_warning(has_warned)
