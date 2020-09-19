@@ -536,14 +536,14 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 
 def trim_tokens(tkns, end_pref, end_pref_after_injections):
     if args.character:
+        char_encoded = le_model.encode(f"{args.character}\n")
         generated = []
         trimmed = []
-        for tkns in tkns:
-            tt = tkns[end_pref_after_injections:]
-            trimmed.append(tt)
-            tmp_seq = le_model.decode(
-                np.concatenate((le_model.encode(f"{args.character}\n"), tt))
-            )
+        for tkn in tkns:
+            tt = tkn[end_pref_after_injections:]
+            msg = np.concatenate((char_encoded, tt))
+            trimmed.append(msg)
+            tmp_seq = le_model.decode(msg)
             tmp_seq = tmp_seq.strip()
             generated.append(tmp_seq)
     else:
