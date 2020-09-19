@@ -574,6 +574,7 @@ def extract_chars_msgs(generated, data):
 
 
 def le_random_wall(fn):
+    global IS_GENERATING
     rand = random.random()
     pprint(f"(random has spoken: {rand})", off="\t", sp_bf=True)
     if rand > args.random_threshold:
@@ -583,6 +584,8 @@ def le_random_wall(fn):
         fn()
     else:
         pprint("(nope, the wall of random could not be passed)", off="\t", sp_aft=True)
+        with LeLocle:
+            IS_GENERATING = False
 
 
 def le_warning(has_warned):
