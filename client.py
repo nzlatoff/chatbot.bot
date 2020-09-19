@@ -313,9 +313,19 @@ def index_from_master():
     return True
 
 
+def trim_tok(tkns):
+    riddance = {le_model.encode(i)[0] for i in {" ", "\n", " ", "<|s|>", "<|e|>", "<|endoftext|>"}}
+    # left trimming
+    while tkns[0] in riddance:
+        tkns = tkns[1:]
+    # right trimming
+    while tkns[-1] in riddance:
+        tkns = tkns[:-1]
+    return tkns
+
 def fancy_tok_typing(tkns):
     pprint(f"(Alright, {args.server_name} sending les tokens to humans...)", sep="-", sp_bf=True, sp_aft=True)
-    tkns = tkns[:-4] # no sep tkns
+    tkns = trim_tok(tkns)
     total = len(tkns) + 1
     nl_ind = np.where(tkns == 201)[0]
     if nl_ind.size == 0:
