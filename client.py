@@ -258,6 +258,8 @@ BATCH_MSG_IND = None
 
 TKNS_LEN_THRESHOLD = args.limit_prefix
 
+HAS_STARTED = False # for autonomous modes
+
 # ----------------------------------------
 # for printing see print_utils.py
 
@@ -272,6 +274,7 @@ def reset_gen():
     global RECEIVED_MSGS
     global BATCH_MSG_IND
     global IS_GENERATING
+    global HAS_STARTED
     global RESETTING
     global MESSAGES
     global PREFIX
@@ -283,6 +286,7 @@ def reset_gen():
         RECEIVED_MSGS = np.array([], dtype=np.int32)
         IS_GENERATING = False
         BATCH_MSG_IND = None
+        HAS_STARTED = False
         RESETTING = False
         TKNS = SEP_TKNS
         PREFIX = ""
@@ -290,7 +294,7 @@ def reset_gen():
     print()
     print("=" * 40)
     print()
-
+    return False
 
 def index_from_master():
 
@@ -325,6 +329,7 @@ def trim_tok(tkns):
     while tkns[-1] in riddance:
         tkns = tkns[:-1]
     return tkns
+
 
 def fancy_tok_typing(tkns):
     pprint(
@@ -594,11 +599,13 @@ def le_random_wall(fn):
         pprint(
             "(le grreat rrrandom is bountiful, let's generate)", off="\t", sp_aft=True
         )
-        fn()
+        if not fn():
+            return False
     else:
         pprint("(nope, the wall of random could not be passed)", off="\t", sp_aft=True)
         with LeLocle:
             IS_GENERATING = False
+    return True
 
 
 def le_warning(has_warned):
@@ -634,7 +641,8 @@ def init():
                     IS_GENERATING = True
                 print()
                 has_warned = False
-                le_random_wall(generate_new)
+                if not le_random_wall(generate_new):
+                    break
                 sleepy_times()
             else:
                 has_warned = le_warning(has_warned)
@@ -648,7 +656,8 @@ def init():
                     IS_GENERATING = True
                 print()
                 has_warned = False
-                le_random_wall(generate_mass)
+                if not le_random_wall(generate_mass):
+                    break
                 sleepy_times()
             else:
                 has_warned = le_warning(has_warned)
@@ -889,6 +898,7 @@ def generate_mass():
         BATCH_MSG_IND = None
         IS_GENERATING = False
 
+    return True
 
 # ----------------------------------------
 # generation: based on tokens
@@ -1076,6 +1086,8 @@ def generate_new():
         BATCH_MSG_IND = None
         IS_GENERATING = False
 
+    return True
+
 
 # ----------------------------------------
 # legacy generation (based on strings)
@@ -1182,7 +1194,7 @@ def connect():
     print(f"{args.server_name} established connection")
     print("-" * 40)
     sio.emit("new bot", args.server_name)
-    init()
+    # init()
 
 
 @sio.event
@@ -1202,6 +1214,7 @@ def reset_session():
 
     global BATCH_MSG_IND
     global RECEIVED_MSGS
+    global HAS_STARTED
     global RESETTING
     global MESSAGES
     global PREFIX
@@ -1221,6 +1234,7 @@ def reset_session():
         with LeLocle:
             RECEIVED_MSGS = np.array([], dtype=np.int32)
             BATCH_MSG_IND = None
+            HAS_STARTED = False
             TKNS = SEP_TKNS
             PREFIX = ""
         print("not generating, resetting variables")
@@ -1234,6 +1248,7 @@ def on_chat_message(data):
 
     global IS_GENERATING
     global RECEIVED_MSGS
+    global HAS_STARTED
     global MESSAGES
     global PREFIX
     global TKNS
@@ -1270,7 +1285,7 @@ def on_chat_message(data):
     # pprint(le_model.decode(TKNS)[0], sp_aft=True)
 
     # reactive mode, legacy or current
-    if args.mode in ("legacy", "reactive"):
+    if args.mode in {"legacy", "reactive"}:
         if not IS_GENERATING:
             with LeLocle:
                 IS_GENERATING = True
@@ -1282,6 +1297,11 @@ def on_chat_message(data):
                 sleepy_times()
         else:
             pprint("(is generating, not answering...)", off="\t", sp_aft=True)
+    else:
+        if not HAS_STARTED:
+            with LeLocle:
+                HAS_STARTED = True
+            init()
 
 
 @sio.on("get bot config")
