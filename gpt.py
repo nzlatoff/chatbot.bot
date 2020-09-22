@@ -296,7 +296,7 @@ class Model:
                 sequences: the generated sequences found.
         NOTE: as the results differ in length, the return type will be pure
         Python lists, and not numpy arrays.
-        """# }}}
+        """  # }}}
 
         pref_data = self._check_prefix(prefix, batch_size)
         prefix, prefix_enc, context_tkns = itemgetter(
@@ -810,7 +810,7 @@ class Model:
                 different)
             context_tkns: the context tokens, a batch of shape (batch_size, n_tokens),
                 ready to be fed to the network
-        """# }}}
+        """  # }}}
 
         if isinstance(prefix, np.ndarray):
             if isinstance(prefix[0], np.integer):
@@ -1031,7 +1031,7 @@ class Model:
             presents: the attention matrices, shape:
                 [batch_size, n_layer, 2, n_head, sequence, n_embd // n_head]
                 (see model.past_shape and default_hparams())
-        """# }}}
+        """  # }}}
 
         lm_output = self.model(
             hparams=self.hparams, X=tokens, past=past, reuse=tf.compat.v1.AUTO_REUSE
@@ -1091,7 +1091,7 @@ class Model:
         all_logits: probabilities for the next token at each step
                     shape: (batch_size, n_tokens, n_vocab)
         all_scores: probabilities at each step for the sampled tokens
-        """# }}}
+        """  # }}}
 
         with tf.name_scope("sample_sequence"):
             # Don't feed the last context token -- leave that to the loop below
@@ -1188,7 +1188,7 @@ class Model:
             range: the range, shape: (batch_size, 1)
             mean: the mean, shape: (batch_size, 1)
             std: the standard deviation, shape: (batch_size, 1)
-        """# }}}
+        """  # }}}
 
         if name and name[-1] != "_":
             name = f"{name}_"
@@ -1213,7 +1213,7 @@ class Model:
         )
         scores = logprobs[indz]
         if return_perplexities:
-            perp_data = self._perplexities(scores)
+            perp_data = self._perplexities(scores, stats=True)
             data.update(
                 {
                     "logprobs": logprobs if not self.reverse else logprobs[:, ::-1],
@@ -1222,11 +1222,11 @@ class Model:
                 }
             )
         if return_ranks:
-            ranks_data = self._ranks(logprobs, scores)
+            ranks_data = self._ranks(logprobs, scores, stats=True)
             data.update(**ranks_data)
         return data
 
-    def _perplexities(self, scores):
+    def _perplexities(self, scores, stats=False):
 
         """# {{{
         Compute the perplexity given a batch of scores (computed by
@@ -1244,14 +1244,19 @@ class Model:
             scores_range: the range of scores, shape: (batch_size, 1)
             scores_mean: the mean of scores, shape: (batch_size, 1)
             scores_std: the standard deviation of scores, shape: (batch_size, 1)
-        """# }}}
+        """  # }}}
 
-        return {
-            "perplexities": 2 ** -np.mean(np.log2(scores), axis=-1, keepdims=True),
-            **self._stats(scores, name="scores"),
-        }
+        if stats:
+            return {
+                "perplexities": 2 ** -np.mean(np.log2(scores), axis=-1, keepdims=True),
+                **self._stats(scores, name="scores"),
+            }
+        else:
+            return {
+                "perplexities": 2 ** -np.mean(np.log2(scores), axis=-1, keepdims=True),
+            }
 
-    def _ranks(self, probs, scores):
+    def _ranks(self, probs, scores, stats=False):
 
         """# {{{
         Compute the rank of tokens for a batch of (freshly generated) input seqences(s).
@@ -1269,16 +1274,19 @@ class Model:
             ranks_range: the range of ranks, shape: (batch_size, 1)
             ranks_mean: the mean of ranks, shape: (batch_size, 1)
             ranks_std: the standard deviation of ranks, shape: (batch_size, 1)
-        """# }}}
+        """  # }}}
 
         logits_sorted = np.sort(probs)[..., ::-1]  # descending order
         ranks = np.where(logits_sorted == scores[..., None])[-1]
         # np.where flattens the results -> reshape to (batch_size, seq_len)
         ranks = ranks.reshape(probs.shape[0], -1)
-        return {
-            "ranks": ranks,
-            **self._stats(ranks, name="ranks"),
-        }
+        if stats:
+            return {
+                "ranks": ranks,
+                **self._stats(ranks, name="ranks"),
+            }
+        else:
+            return {"ranks": ranks}
 
     # Two following functions adapted from @gpt2ent:
     # https://github.com/gpt2ent/gpt-2-simple/blob/652fdab80131ce83f8f1b6fd00f597dd48ae2e36/gpt_2_simple/gpt_2.py#L504
@@ -1294,7 +1302,7 @@ class Model:
         --------
         logits: array of shape: (batch_size, n_tokens, n_vocab)
                 or, if last_only is True: (batch_size, 1, n_vocab)
-        """# }}}
+        """  # }}}
 
         if not isinstance(context_tokens[0], (list, tuple, np.ndarray)):
             self._check_batch_size(1, verbose=verbose)
@@ -1356,7 +1364,7 @@ class Model:
             ranks_range: the range of ranks, shape: (n_sequences, 1)
             ranks_mean: the mean of ranks, shape: (n_sequences, 1)
             ranks_std: the standard deviation of ranks, shape: (n_sequences, 1)
-        """# }}}
+        """  # }}}
 
         if verbose:
             msg = "calculating ranks of existing sentences:"
@@ -1434,7 +1442,7 @@ class Model:
             scores_range: the range of scores, shape: (n_sequences, 1)
             scores_mean: the mean of scores, shape: (n_sequences, 1)
             scores_std: the standard deviation of scores, shape: (n_sequences, 1)
-        """# }}}
+        """  # }}}
 
         if verbose:
             msg = "calculating perplexity of existing sentences:"
