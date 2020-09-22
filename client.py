@@ -314,7 +314,10 @@ def index_from_master():
 
 
 def trim_tok(tkns):
-    riddance = {le_model.encode(i)[0] for i in {" ", "\n", " ", "<|s|>", "<|e|>", "<|endoftext|>"}}
+    riddance = {
+        le_model.encode(i)[0]
+        for i in {" ", "\n", " ", "<|s|>", "<|e|>", "<|endoftext|>"}
+    }
     # left trimming
     while tkns[0] in riddance:
         tkns = tkns[1:]
@@ -324,7 +327,12 @@ def trim_tok(tkns):
     return tkns
 
 def fancy_tok_typing(tkns):
-    pprint(f"(Alright, {args.server_name} sending les tokens to humans...)", sep="-", sp_bf=True, sp_aft=True)
+    pprint(
+        f"(Alright, {args.server_name} sending les tokens to humans...)",
+        sep="-",
+        sp_bf=True,
+        sp_aft=True,
+    )
     tkns = trim_tok(tkns)
     total = len(tkns) + 1
     nl_ind = np.where(tkns == 201)[0]
@@ -341,7 +349,7 @@ def fancy_tok_typing(tkns):
             message = le_model.decode(tkns[:i])
         else:
             char = le_model.decode(tkns[:nl_ind])
-            message = le_model.decode(tkns[nl_ind+1:i+2])
+            message = le_model.decode(tkns[nl_ind + 1 : i + 2])
         msg = f"{tkns[:i+2]}".split("\n")
         current = msg[-1] + "\r"
         if len(current) < len(prev):
@@ -363,7 +371,12 @@ def fancy_tok_typing(tkns):
 
 
 def fancy_typing(char, message):
-    pprint(f"(Awright, {args.server_name} sending le message to humans...)", sep="-", sp_bf=True, sp_aft=True)
+    pprint(
+        f"(Awright, {args.server_name} sending le message to humans...)",
+        sep="-",
+        sp_bf=True,
+        sp_aft=True,
+    )
     total = len(message) + 1
     for i in range(total):
         if RESETTING:
@@ -718,7 +731,13 @@ def generate_mass():
 
         # then produce the rest, until the end token
         try:
-            pprint("(generation proper, until reaching the end of each answer)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+            pprint(
+                "(generation proper, until reaching the end of each answer)",
+                off="\t\t",
+                sep="-",
+                sp_bf=True,
+                sp_aft=True,
+            )
             data = le_model.gen_until(
                 prefix=data["tokens"],
                 until="<|s|>",
@@ -742,7 +761,9 @@ def generate_mass():
             suitors["perplexities"] = data["perplexities"]
             suitors["tokens"] = data["tokens"]
 
-            generated, data["trimmed"] = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
+            generated, data["trimmed"] = trim_tokens(
+                data["tokens"], end_pref, end_pref_after_injections
+            )
 
             if RESETTING:
                 return reset_gen()
@@ -777,7 +798,9 @@ def generate_mass():
             concat_seqs = np.array(suitors["tokens"] + data["tokens"])
             suitors["tokens"] = list(concat_seqs[n_best_indz][:n][sorted_indz])
 
-            generated, data["trimmed"] = trim_tokens(data["tokens"], end_pref, end_pref_after_injections)
+            generated, data["trimmed"] = trim_tokens(
+                data["tokens"], end_pref, end_pref_after_injections
+            )
 
             if RESETTING:
                 return reset_gen()
@@ -883,13 +906,14 @@ def generate_new():
     send_typing(
         {"id": sio.sid, "character": "", "message": "", "user": args.server_name,}
     )
-    send_entrails(
-        {
-            "id": sio.sid,
-            "entrails": f"Tokens: {str(TKNS)}" if TKNS.size > 0 else "",
-            "user": args.server_name,
-        }
-    )
+
+    # send_entrails(
+    #     {
+    #         "id": sio.sid,
+    #         "entrails": f"Tokens: {str(TKNS)}" if TKNS.size > 0 else "",
+    #         "user": args.server_name,
+    #     }
+    # )
 
     if RESETTING:
         return reset_gen()
@@ -924,7 +948,12 @@ def generate_new():
 
     # first produce a small bit avoiding the end token
     try:
-        pprint("(starting generation, making sure we don't finish early)", off="\t\t", sep="-", sp_bf=True)
+        pprint(
+            "(starting generation, making sure we don't finish early)",
+            off="\t\t",
+            sep="-",
+            sp_bf=True,
+        )
         data = le_model.gen_avoiding(
             prefix=TKNS,
             avoiding=le_model.encode("<|e|>"),
@@ -939,13 +968,13 @@ def generate_new():
         handle_error("gen_avoiding", end_pref_orig, e)
         return reset_gen()
 
-    send_entrails(
-        {
-            "id": sio.sid,
-            "entrails": f"Tokens:\n{str(data['tokens'])}\nLogprobs:\n{str(data['logprobs'])}\nPerplexities:\n{str(data['perplexities'])}",
-            "user": args.server_name,
-        }
-    )
+    # send_entrails(
+    #     {
+    #         "id": sio.sid,
+    #         "entrails": f"Tokens:\n{str(data['tokens'])}\nLogprobs:\n{str(data['logprobs'])}\nPerplexities:\n{str(data['perplexities'])}",
+    #         "user": args.server_name,
+    #     }
+    # )
 
     pprint("(done!)", off="\t\t", sp_aft=True)
     for i, tkn in enumerate(data["tokens"]):
@@ -958,7 +987,13 @@ def generate_new():
 
     # then produce the rest, until the end token
     try:
-        pprint("(generation proper, until reaching the end of each answer)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
+        pprint(
+            "(generation proper, until reaching the end of each answer)",
+            off="\t\t",
+            sep="-",
+            sp_bf=True,
+            sp_aft=True,
+        )
         data = le_model.gen_until(
             prefix=data["tokens"],
             until="<|s|>",
@@ -1022,6 +1057,10 @@ def generate_new():
         return reset_gen()
 
     send_ind()
+
+    send_direct_message(
+        {"character": char, "message": message, "user": args.server_name, "id": sio.sid}
+    )
 
     if not fancy_tok_typing(data["trimmed"][BATCH_MSG_IND]):
         return reset_gen()
@@ -1290,7 +1329,7 @@ def set_config(data):
             if k in {"user", "id", "run", "model"}:
                 continue
             try:
-                if k in  {"sleepy_time", "print_speed"}:
+                if k in {"sleepy_time", "print_speed"}:
                     v = type(args.__getattribute__(k))(v)
                     v = v if v > 0 else 0.0001
                 else:
@@ -1343,11 +1382,11 @@ def send_batch(data):
 
 
 def send_message(data):
-    # print("-"*40)
-    # print("sending message:")
-    # print(data)
-    # print("-"*40)
     sio.emit("chat message", data)
+
+
+def send_direct_message(data):
+    sio.emit("direct chat message", data)
 
 
 user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")

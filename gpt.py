@@ -65,11 +65,14 @@ class Model:
         self.temperature = tf.compat.v1.placeholder(tf.float32, (), name="temperature")
         self.top_k = tf.compat.v1.placeholder(tf.int32, (), name="top_k")
         self.top_p = tf.compat.v1.placeholder(tf.float32, (), name="top_p")
-        self.lgt = tf.compat.v1.placeholder(tf.float32, [None, len(self.encoder)], name="lgt")
+        self.lgt = tf.compat.v1.placeholder(
+            tf.float32, [None, len(self.encoder)], name="lgt"
+        )
         self.softmax = tf.nn.softmax(self.lgt, axis=-1, name="final_softmax")
         self.reverse = reverse
+        self.model = model.model
         # required to load checkpoint
-        self.model = model.model(hparams=self.hparams, X=self.context)
+        self.model(hparams=self.hparams, X=self.context)
         self.load_checkpoint(f"checkpoint/{run_name}")
         # sampling the network, self.output will be used throughout
         with tf.device(device):
@@ -98,9 +101,9 @@ class Model:
         batch_size=None,
         print_tokens=False,
     ):
-        """
-        Highest level function, simply prints generated texts. Invokes self.gen().
 
+        """# {{{
+        Highest level function, simply prints generated texts. Invokes self.gen().
         Parameters:
         -----------
         prefix: string or list of list/np.arrays of tokens. If a string is
@@ -127,8 +130,8 @@ class Model:
             not passing a string as prefix.
         print_tokens:
             boolean. Print raw tokens instead of decoding them to strings.
+        """# }}}
 
-        """
         for seq in self.gen(
             prefix=prefix,
             length=length,
@@ -136,25 +139,18 @@ class Model:
             top_k=top_k,
             top_p=top_p,
             batch_size=batch_size,
-            return_tokens=print_tokens,
         )["sequences"]:
             print("-" * 40)
             print(seq)
         print("-" * 40)
 
     def gen(
-        self,
-        prefix="\n",
-        length=5,
-        temperature=1,
-        top_k=0,
-        top_p=0.0,
-        batch_size=None,
+        self, prefix="\n", past=None, length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None,
     ):
-        """
+
+        """# {{{
         Higher level generation: input a sentence, get an array with n batches
         of continuations.
-
         Parameters:
         -----------
         prefix: string or list of list/np.arrays of tokens. If a string is
@@ -181,31 +177,46 @@ class Model:
             not passing a string as prefix.
         return_tokens:
             boolean. Return tokens instead of decoding them to strings.
-
         Returns:
         --------
         a dictionary containig:
             sequences: the decoded generated sequences.
             tokens: the generated tokens.
             logits: all the scores for all tokens at each step.
-        """
+        """# }}}
+
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
-        tkns, logits = self.sess.run(
-            self.output,
-            feed_dict={
-                self.length: length,
-                self.context: context_tkns,
-                self.temperature: temperature,
-                self.top_k: top_k,
-                self.top_p: top_p,
-            },
-        )
+        if past is None:
+            results = self.sess.run(
+                self.output,
+                feed_dict={
+                    self.length: length,
+                    self.context: context_tkns,
+                    self.temperature: temperature,
+                    self.top_k: top_k,
+                    self.top_p: top_p,
+                },
+            )
+        else:
+            results = self.sess.run(
+                self.output,
+                feed_dict={
+                    self.length: length,
+                    self.context: context_tkns,
+                    self.past: past,
+                    self.temperature: temperature,
+                    self.top_k: top_k,
+                    self.top_p: top_p,
+                },
+            )
+        tkns, logits, past = itemgetter("tokens", "logits", "past")(results)
         return {
             "sequences": self.decode(tkns)
             if not self.reverse
             else self.decode(tkns[:, ::-1]),
             "tokens": tkns if not self.reverse else tkns[:, ::-1],
             "logits": logits if not self.reverse else logits[:, ::-1],
+            "past": past,
         }
 
     def gen_until(
@@ -220,7 +231,8 @@ class Model:
         top_p=0.0,
         batch_size=None,
     ):
-        """
+
+        """# {{{
         Generate sequences until a special token (e.g. "<|endoftext|>") or a
         regex is found. The resulting sequences will not be of the same length.
         Beware, when using the string version of until, not to
@@ -228,7 +240,6 @@ class Model:
         character, and '\.' a literal dot). The module used is the `regex`
         module (not `re`), which is a superset of 're' allowing for Perl/utf-8
         syntax.
-
         Parameters:
         -----------
         prefix: string or list of list/np.arrays of tokens. If a string is
@@ -260,7 +271,6 @@ class Model:
             not passing a string as prefix.
         return_tokens:
             boolean. Return tokens instead of decoding them to strings.
-
         Returns:
         --------
         if the searched string is a special token:
@@ -284,10 +294,9 @@ class Model:
         if the searched string is a regex:
             a dictionary containing:
                 sequences: the generated sequences found.
-
         NOTE: as the results differ in length, the return type will be pure
         Python lists, and not numpy arrays.
-        """
+        """# }}}
 
         pref_data = self._check_prefix(prefix, batch_size)
         prefix, prefix_enc, context_tkns = itemgetter(
@@ -326,7 +335,9 @@ class Model:
                     chunk_length=chunk_length,
                     exclude_until=exclude_until,
                 )
-                msg = f"\t\t{tkns[:, -chunk_length:]}".replace("\n", "")[:term.width - 16]
+                msg = f"\t\t{tkns[:, -chunk_length:]}".replace("\n", "")[
+                    : term.width - 16
+                ]
                 print(msg)
                 context_tkns = tkns
                 i += 1
@@ -339,15 +350,15 @@ class Model:
             scores = []
             stats = []
             for lgt, tkn in zip(logits, tkns):
-                lgpr = self.sess.run(self.softmax, feed_dict={ self.lgt: lgt})
+                lgpr = self.sess.run(self.softmax, feed_dict={self.lgt: lgt})
                 tkn = tkn[1:] if len(tkn) > 1 else tkn
-                scrs = np.nan_to_num(
-                    [(lgpr[i, t]) for i, t in enumerate(tkn)]
-                )
+                scrs = np.nan_to_num([(lgpr[i, t]) for i, t in enumerate(tkn)])
                 scores.append(scrs)
                 perps = self._perplexities(scrs)
                 perplexities.append(perps["perplexities"])
-                stats.append({k:v for k,v in perps.items() if k is not "perplexities"})
+                stats.append(
+                    {k: v for k, v in perps.items() if k is not "perplexities"}
+                )
                 logprobs.append(lgpr)
 
             return {
@@ -403,7 +414,8 @@ class Model:
         top_p=0.0,
         batch_size=None,
     ):
-        """
+
+        """# {{{
         Generate beginnings of sequences avoiding a certain token. Useful when
         wanting continuations despite the fact that a likely outcome from the
         network's perspective is an end token. This function allows to generate
@@ -414,7 +426,6 @@ class Model:
         instance '.' means any character, and '\.' a literal dot). The module
         used is the `regex` module (not `re`), which is a superset of 're'
         allowing for Perl/utf-8 syntax.
-
         Parameters:
         -----------
         prefix: string or list of list/np.arrays of tokens. If a string is
@@ -444,7 +455,6 @@ class Model:
             not passing a string as prefix.
         return_tokens:
             boolean. Return tokens instead of decoding them to strings.
-
         Returns:
         --------
         a dictionary containig:
@@ -460,7 +470,7 @@ class Model:
             scores_range: the range of scores, shape: (batch_size, 1)
             scores_mean: the mean of scores, shape: (batch_size, 1)
             scores_std: the standard deviation of scores, shape: (batch_size, 1)
-        """
+        """# }}}
 
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
         gen_tkns = []
@@ -498,7 +508,7 @@ class Model:
             else:
                 # print("searching for token")
                 if isinstance(avoiding, str):
-                    avoiding = m.encode(avoiding)[0]
+                    avoiding = self.encode(avoiding)[0]
                 for i, t in enumerate(tkns):
                     if avoiding not in t[-length:]:
                         gen_tkns.append(t)
@@ -516,13 +526,11 @@ class Model:
         for lgt, tkn in zip(gen_logits, gen_tkns):
             tkn = tkn[1:] if len(tkn) > 1 else tkn
             lgpr = self.sess.run(self.softmax, feed_dict={self.lgt: lgt})
-            scrs = np.nan_to_num(
-                [(lgpr[i, t]) for i, t in enumerate(tkn)]
-            )
+            scrs = np.nan_to_num([(lgpr[i, t]) for i, t in enumerate(tkn)])
             scores.append(scrs)
             perps = self._perplexities(scrs)
             perplexities.append(perps["perplexities"])
-            stats.append({k:v for k,v in perps.items() if k is not "perplexities"})
+            stats.append({k: v for k, v in perps.items() if k is not "perplexities"})
             logprobs.append(lgpr)
         return {
             "sequences": self.decode(gen_tkns)
@@ -547,10 +555,10 @@ class Model:
         return_perplexities=True,
         return_ranks=True,
     ):
-        """
+
+        """# {{{
         Lower level generation: input a sentence, get n batches of generated
         tokens as well as the logits associated with each step.
-
         Parameters:
         -----------
         prefix: string or list of list/np.arrays of tokens. If a string is
@@ -585,7 +593,6 @@ class Model:
             all the way until n_vocab.), and return those as well as a dict
             with various statistics (min, max, range, mean, std) see
             self._stats().
-
         Returns:
         --------
         a dictionary containg:
@@ -593,29 +600,26 @@ class Model:
                     shape: (batch_size, length)
             logits: the scores for the next token at each step
                     shape: (batch_size, n_tokens - 1, n_vocab)
-
             if return_perplexities, the dict will also include:
-            ---------------------------------------------------
-            scores: sequence of logits (scores, unnormalized) for each sequence
-                    shape: (batch_size, n_tokens)
-            probs: the normalized logits (softmaxed into probabilities)
-                    shape: (batch_size, n_tokens - 1, n_vocab)
-            perplexities: the perplexity for each sentence, shape: (batch_size, 1)
-            scores_min:  the min of scores, shape: (batch_size, 1)
-            scores_max: the max of scores, shape: (batch_size, 1)
-            scores_range: the range of scores, shape: (batch_size, 1)
-            scores_mean: the mean of scores, shape: (batch_size, 1)
-            scores_std: the standard deviation of scores, shape: (batch_size, 1)
-
+                scores: sequence of logits (scores, unnormalized) for each sequence
+                        shape: (batch_size, n_tokens)
+                probs: the normalized logits (softmaxed into probabilities)
+                        shape: (batch_size, n_tokens - 1, n_vocab)
+                perplexities: the perplexity for each sentence, shape: (batch_size, 1)
+                scores_min:  the min of scores, shape: (batch_size, 1)
+                scores_max: the max of scores, shape: (batch_size, 1)
+                scores_range: the range of scores, shape: (batch_size, 1)
+                scores_mean: the mean of scores, shape: (batch_size, 1)
+                scores_std: the standard deviation of scores, shape: (batch_size, 1)
             if return_ranks, the dict will include the above and the following:
-            -------------------------------------------------------------------
-            ranks: sequence of ranks for each sequence, shape: (batch_size, n_tokens)
-            ranks_min: the min of ranks, shape: (batch_size, 1)
-            ranks_max: the max of ranks, shape: (batch_size, 1)
-            ranks_range: the range of ranks, shape: (batch_size, 1)
-            ranks_mean: the mean of ranks, shape: (batch_size, 1)
-            ranks_std: the standard deviation of ranks, shape: (batch_size, 1)
-        """
+                ranks: sequence of ranks for each sequence, shape: (batch_size, n_tokens)
+                ranks_min: the min of ranks, shape: (batch_size, 1)
+                ranks_max: the max of ranks, shape: (batch_size, 1)
+                ranks_range: the range of ranks, shape: (batch_size, 1)
+                ranks_mean: the mean of ranks, shape: (batch_size, 1)
+                ranks_std: the standard deviation of ranks, shape: (batch_size, 1)
+        """# }}}
+
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
         tkns, logits = self.sess.run(
             self.output,
@@ -752,8 +756,9 @@ class Model:
         self.saver = tf.compat.v1.train.Saver(allow_empty=True)
         self.sess.run(tf.compat.v1.global_variables_initializer())
         print("-" * 40)
-        print(f"Loading checkpoint {self.ckpt}")
+        print(f"loading checkpoint {self.ckpt}")
         self.saver.restore(self.sess, self.ckpt)
+
 
     def _check_hparams(self, hparams_file):
         """
@@ -763,7 +768,7 @@ class Model:
             - hparams_file: path to hparams json file.
         """
         if hparams_file is not None:
-            print(f"Reloading hparams from file {hparams_file}")
+            print(f"reloading hparams from file {hparams_file}")
             with open(hparams_file) as f:
                 self.hparams.override_from_dict(json.load(f))
 
@@ -783,30 +788,30 @@ class Model:
                 self.reset(batch_size=batch_size)
 
     def _check_prefix(self, prefix, batch_size):
-        """
+
+        """# {{{
         Check whether prefix is a string or a list of tokens (for parallel
         generation). If passing tokens as prefix all sequences must have the
         same length. This will set the batch size according to either:
             the parameters given to the function calling this one
             (gen(), gen_until(), etc.), or
             the number of prefix token sequences given.
-
         Parameters:
         -----------
-            prefix: string or list of lists/np arrays of tokens
-            batch_size: int, setting the batch size for the case where the
+        prefix: string or list of lists/np arrays of tokens
+        batch_size: int, setting the batch size for the case where the
             prefix is a string
-
         Returns:
         --------
-            a dictionary containing:
-                "prefix": the prefix (or batch thereof, if different) as a
-                    list of strings
-                "prefix_enc": the encoded prefix (or batch thereof, if
-                    different)
-                "context_tkns": the context tokens, a batch of shape (batch_size, n_tokens),
-                    ready to be fed to the network
-        """
+        a dictionary containing:
+            prefix: the prefix (or batch thereof, if different) as a
+                list of strings
+            prefix_enc: the encoded prefix (or batch thereof, if
+                different)
+            context_tkns: the context tokens, a batch of shape (batch_size, n_tokens),
+                ready to be fed to the network
+        """# }}}
+
         if isinstance(prefix, np.ndarray):
             if isinstance(prefix[0], np.integer):
                 self._check_batch_size(batch_size)
@@ -1009,24 +1014,26 @@ class Model:
             )
 
     def step(self, tokens, past=None):
-        """
+
+        """# {{{
         One step of Transformation.
         Inputs:
         -------
-            tokens: machine-readable subwords
-            past: None at first, will contain the matrices of attention for
+        tokens: machine-readable subwords
+        past: None at first, will contain the matrices of attention for
             each step (remembered in the loop of self.sample, so that they
             don't need to be recomputed each time).
         Returns:
         --------
-            a dictionary containing:
-                - logits: probabilities for the next tokens at each step,
-                          shape: (batch_size, n_tokens - 1, n_vocab)
-                - presents: the attention matrices, shape:
-                            [batch_size, n_layer, 2, n_head, sequence, n_embd // n_head]
-                            (see model.past_shape and default_hparams())
-        """
-        lm_output = model.model(
+        a dictionary containing:
+            logits: probabilities for the next tokens at each step,
+                shape: (batch_size, n_tokens - 1, n_vocab)
+            presents: the attention matrices, shape:
+                [batch_size, n_layer, 2, n_head, sequence, n_embd // n_head]
+                (see model.past_shape and default_hparams())
+        """# }}}
+
+        lm_output = self.model(
             hparams=self.hparams, X=tokens, past=past, reuse=tf.compat.v1.AUTO_REUSE
         )
         logits = lm_output["logits"][:, :, : self.hparams.n_vocab]
@@ -1042,7 +1049,8 @@ class Model:
     def sample(
         self, length=5, context=None, temperature=1, top_k=0, top_p=0.0,
     ):
-        """
+
+        """# {{{
         The Sample loop, using tf.while(), see:
         https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/while_loop
         The while loop must be constructed functionally, hence the
@@ -1060,7 +1068,6 @@ class Model:
               arguments, loop_vars, will be.
             - loop_vars: the variables passed to the loop (body/cond).
             - back_prop: Nein!
-
         Parameters:
         -----------
         length: number of tokens to be generated (not string letters). Default: 5.
@@ -1078,14 +1085,13 @@ class Model:
         top_p: float, ]0,1]. Nucleus sampling. At each step, the network will sample
             from the most probable tokens the combined probabilities of which
             is at most top_p. Default: 0.0 (deactivated).
-
         Returns:
         --------
         tokens: machine-readable subwords
         all_logits: probabilities for the next token at each step
                     shape: (batch_size, n_tokens, n_vocab)
         all_scores: probabilities at each step for the sampled tokens
-        """
+        """# }}}
 
         with tf.name_scope("sample_sequence"):
             # Don't feed the last context token -- leave that to the loop below
@@ -1113,9 +1119,10 @@ class Model:
                 samples = tf.random.categorical(logits, num_samples=1, dtype=tf.int32)
 
                 return [
-                    # all logits
+                    # all logits [batch_size, seq_len, n_vocab]
                     tf.concat([all_logits, next_outputs["logits"]], axis=-2),
                     # all pasts/presents (attention matrices)
+                    # [batch_size, hparams.n_layer, 2, hparams.n_head, sequence, hparams.n_embd // hparams.n_head]
                     tf.concat([past, next_outputs["presents"]], axis=-2),
                     # previous samples (last token)
                     tf.squeeze(samples, axis=[1]),
@@ -1140,6 +1147,7 @@ class Model:
                     # all logits
                     tf.TensorShape([self.batch_size, None, self.hparams.n_vocab]),
                     # all pasts/presents (attention matrices)
+                    # [batch_size, hparams.n_layer, 2, hparams.n_head, sequence, hparams.n_embd // hparams.n_head]
                     tf.TensorShape(
                         model.past_shape(
                             hparams=self.hparams, batch_size=self.batch_size
@@ -1167,11 +1175,11 @@ class Model:
     # - get_perplexity: gets perplexity for one or more existing sentences
 
     def _stats(self, arr, name=None):
-        """
+
+        """# {{{
         Parameters:
         -----------
         arr: an array/tuple/np.array of batch_size arrays/tuples/np.arrays.
-
         Returns:
         --------
         a dictionary of statistics:
@@ -1180,7 +1188,8 @@ class Model:
             range: the range, shape: (batch_size, 1)
             mean: the mean, shape: (batch_size, 1)
             std: the standard deviation, shape: (batch_size, 1)
-        """
+        """# }}}
+
         if name and name[-1] != "_":
             name = f"{name}_"
         else:
@@ -1218,15 +1227,14 @@ class Model:
         return data
 
     def _perplexities(self, scores):
-        """
+
+        """# {{{
         Compute the perplexity given a batch of scores (computed by
         self.run()).
-
         Parameters:
         -----------
         scores: the softmaxed logits.
             shape: (batch_size, seq_len - 1)
-
         Returns
         -------
         a dictionary containing:
@@ -1236,7 +1244,7 @@ class Model:
             scores_range: the range of scores, shape: (batch_size, 1)
             scores_mean: the mean of scores, shape: (batch_size, 1)
             scores_std: the standard deviation of scores, shape: (batch_size, 1)
-        """
+        """# }}}
 
         return {
             "perplexities": 2 ** -np.mean(np.log2(scores), axis=-1, keepdims=True),
@@ -1244,15 +1252,14 @@ class Model:
         }
 
     def _ranks(self, probs, scores):
-        """
+
+        """# {{{
         Compute the rank of tokens for a batch of (freshly generated) input seqences(s).
         Note: this assumes equal lengths for sequences.
-
         Parameters
         ----------
         probs: all probs of the seq batch. (produced by .run())
         scores: scores for the seq batch. (produced by .run())
-
         Returns:
         --------
         a dictionary containing:
@@ -1262,7 +1269,8 @@ class Model:
             ranks_range: the range of ranks, shape: (batch_size, 1)
             ranks_mean: the mean of ranks, shape: (batch_size, 1)
             ranks_std: the standard deviation of ranks, shape: (batch_size, 1)
-        """
+        """# }}}
+
         logits_sorted = np.sort(probs)[..., ::-1]  # descending order
         ranks = np.where(logits_sorted == scores[..., None])[-1]
         # np.where flattens the results -> reshape to (batch_size, seq_len)
@@ -1276,16 +1284,18 @@ class Model:
     # https://github.com/gpt2ent/gpt-2-simple/blob/652fdab80131ce83f8f1b6fd00f597dd48ae2e36/gpt_2_simple/gpt_2.py#L504
 
     def get_logits(self, context_tokens, last_only=False, verbose=True):
-        """
+
+        """# {{{
         Generate the logits (probabilities of each token) at each step for a
         given one or more sequences of tokens. If computing logits for a batch
         of tokens, said batch must have been padded beforehand (all token
         sequences must have the same length).
         Returns:
         --------
-            logits: array of shape: (batch_size, n_tokens, n_vocab)
-                    or, if last_only is True: (batch_size, 1, n_vocab)
-        """
+        logits: array of shape: (batch_size, n_tokens, n_vocab)
+                or, if last_only is True: (batch_size, 1, n_vocab)
+        """# }}}
+
         if not isinstance(context_tokens[0], (list, tuple, np.ndarray)):
             self._check_batch_size(1, verbose=verbose)
             context = self.batch_size * [context_tokens]
@@ -1324,7 +1334,8 @@ class Model:
         return tkns
 
     def get_rank(self, sequences=["\n"], verbose=False):
-        """
+
+        """# {{{
         Compute the rank of tokens for input sentence(s). Note: this assumes
         unequal lengths for sentences. For freshly neuroned batches of equal
         lengths, use the logits returned by self.run() and pass them to
@@ -1345,7 +1356,8 @@ class Model:
             ranks_range: the range of ranks, shape: (n_sequences, 1)
             ranks_mean: the mean of ranks, shape: (n_sequences, 1)
             ranks_std: the standard deviation of ranks, shape: (n_sequences, 1)
-        """
+        """# }}}
+
         if verbose:
             msg = "calculating ranks of existing sentences:"
             print(msg)
@@ -1379,7 +1391,7 @@ class Model:
                 print("sequence:")
                 print(sequences[i])
                 print()
-                for k,v in stats.items():
+                for k, v in stats.items():
                     print(f"{k}: {v[0]}")
                 print()
                 print("ranks:")
@@ -1389,26 +1401,26 @@ class Model:
         print()
         return {
             "ranks": ranks,
-            **{k: np.stack([st[k] for st in ranks_stats]) for k in ranks_stats[0].keys()},
+            **{
+                k: np.stack([st[k] for st in ranks_stats])
+                for k in ranks_stats[0].keys()
+            },
         }
 
     def get_perplexity(
-        self,
-        sequences=["\n"],
-        verbose=False,
+        self, sequences=["\n"], verbose=False,
     ):
-        """
+
+        """# {{{
         Compute perplexity score(s) for input sentence(s). Note: this assumes
         unequal lengths for sentences. For freshly neuroned batches of equal
         lengths, use the scores returned by self.run() and pass them to
         _perplexities.
-
         Parameters:
         -----------
         sequences: str, list/np.array of strings, of tokens, of lists/np.arrays
             of tokens.
         verbose: print the progress made. Defaults to false.
-
         Returns:
         --------
         a dictionary containing:
@@ -1422,7 +1434,8 @@ class Model:
             scores_range: the range of scores, shape: (n_sequences, 1)
             scores_mean: the mean of scores, shape: (n_sequences, 1)
             scores_std: the standard deviation of scores, shape: (n_sequences, 1)
-    """
+        """# }}}
+
         if verbose:
             msg = "calculating perplexity of existing sentences:"
             print(msg)
@@ -1458,7 +1471,7 @@ class Model:
                 print(sequences[i])
                 print()
                 print(f"perplexity: {perp[0]}")
-                for k,v in stats.items():
+                for k, v in stats.items():
                     print(f"{k}: {v[0]}")
                 print()
                 print("scores:")
@@ -1466,7 +1479,10 @@ class Model:
                 print()
         return {
             "scores": scores,
-            **{k: np.stack([st[k] for st in scores_stats]) for k in scores_stats[0].keys()},
+            **{
+                k: np.stack([st[k] for st in scores_stats])
+                for k in scores_stats[0].keys()
+            },
             "perplexities": np.array(perplexities),
         }
 
