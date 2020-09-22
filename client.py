@@ -627,40 +627,26 @@ def sleepy_times():
     time.sleep(r)
 
 
-def init():
+def auto_loop(fn):
     global IS_GENERATING
     global SEP_TKNS
     global TKNS
-    if args.mode == "autonomous":
-        with LeLocle:
-            TKNS = SEP_TKNS
-        has_warned = False
-        while True:
-            if not IS_GENERATING:
-                with LeLocle:
-                    IS_GENERATING = True
-                print()
-                has_warned = False
-                if not le_random_wall(generate_new):
-                    break
-                sleepy_times()
-            else:
-                has_warned = le_warning(has_warned)
-    elif args.mode == "optimizer":
-        with LeLocle:
-            TKNS = SEP_TKNS
-        has_warned = False
-        while True:
-            if not IS_GENERATING:
-                with LeLocle:
-                    IS_GENERATING = True
-                print()
-                has_warned = False
-                if not le_random_wall(generate_mass):
-                    break
-                sleepy_times()
-            else:
-                has_warned = le_warning(has_warned)
+    with LeLocle:
+        TKNS = SEP_TKNS
+    has_warned = False
+    while True:
+        if not IS_GENERATING:
+            with LeLocle:
+                IS_GENERATING = True
+            print()
+            has_warned = False
+            if not le_random_wall(fn):
+                break
+            sleepy_times()
+            if not HAS_STARTED:
+                break
+        else:
+            has_warned = le_warning(has_warned)
 
 
 # ----------------------------------------
@@ -1194,7 +1180,10 @@ def connect():
     print(f"{args.server_name} established connection")
     print("-" * 40)
     sio.emit("new bot", args.server_name)
-    # init()
+    # if args.mode == "autonomous":
+    #     auto_loop(generate_new)
+    # elif args.mode == "optimizer":
+    #     auto_loop(generate_mass)
 
 
 @sio.event
@@ -1301,7 +1290,10 @@ def on_chat_message(data):
         if not HAS_STARTED:
             with LeLocle:
                 HAS_STARTED = True
-            init()
+            if args.mode == "autonomous":
+                auto_loop(generate_new)
+            elif args.mode == "optimizer":
+                auto_loop(generate_mass)
 
 
 @sio.on("get bot config")
