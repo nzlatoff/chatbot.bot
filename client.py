@@ -362,12 +362,7 @@ def fancy_tok_typing(tkns):
         print(msg[-1] + "\r", end="")
         prev = current
         send_typing(
-            {
-                "id": sio.sid,
-                "character": char,
-                "message": message,
-                "user": args.server_name,
-            }
+            {"character": char, "message": message,}
         )
         time.sleep(args.print_speed)
     print()
@@ -387,12 +382,7 @@ def fancy_typing(char, message):
         if RESETTING:
             return False
         send_typing(
-            {
-                "id": sio.sid,
-                "character": char,
-                "message": message[:i],
-                "user": args.server_name,
-            }
+            {"character": char, "message": message[:i],}
         )
         time.sleep(args.print_speed)
     print()
@@ -662,7 +652,7 @@ def generate_mass():
     global TKNS
 
     send_typing(
-        {"id": sio.sid, "character": "", "message": "", "user": args.server_name,}
+        {"character": "", "message": "",}
     )
 
     if RESETTING:
@@ -900,7 +890,7 @@ def generate_new():
     global TKNS
 
     send_typing(
-        {"id": sio.sid, "character": "", "message": "", "user": args.server_name,}
+        {"character": "", "message": "",}
     )
 
     # send_entrails(
@@ -1372,7 +1362,9 @@ def set_message_choice(data):
 
 
 def send_typing(data):
-    sio.emit("typing", data)
+    sio.emit(
+        "typing", {"id": sio.sid, "user": args.server_name, "scroll": True, **data,}
+    )
 
 
 def send_entrails(data):
@@ -1381,7 +1373,7 @@ def send_entrails(data):
 
 def send_three_dots():
     send_typing(
-        {"id": sio.sid, "character": "", "message": "(...)", "user": args.server_name,}
+        {"character": "", "message": "(...)",}
     )
 
 
