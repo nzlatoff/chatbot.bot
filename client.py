@@ -485,10 +485,10 @@ def select_in_batch(data, chars, messages):
                 ).item()
         elif args.bot_choice == "min":
             with LeLocle:
-                BATCH_MSG_IND = np.argmin(data["perplexities"])
+                BATCH_MSG_IND = int(np.argmin(data["perplexities"]))
         elif args.bot_choice == "max":
             with LeLocle:
-                BATCH_MSG_IND = np.argmax(data["perplexities"])
+                BATCH_MSG_IND = int(np.argmax(data["perplexities"]))
         char = chars[BATCH_MSG_IND]
         message = messages[BATCH_MSG_IND]
         pprint(
@@ -518,7 +518,7 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
     send_three_dots()
 
     pprint(
-        f"O.O.O.P.S. A problem ocurred during {fn_name}: {repr(e)}",
+        f"O.O.O.P.S. A problem ocurred during {fn_name}: {repr(e)} (type: {type(e)})",
         sep="=",
         sp_bf=True,
     )
@@ -728,7 +728,7 @@ def generate_mass():
                 prefix=data["tokens"],
                 until="<|s|>",
                 exclude_until=False,
-                sanity_limit=300,
+                sanity_limit=100,
                 chunk_length=5,
                 temperature=args.temperature,
                 top_p=args.top_p,
@@ -993,7 +993,7 @@ def generate_new():
             prefix=data["tokens"],
             until="<|s|>",
             exclude_until=False,
-            sanity_limit=300,
+            sanity_limit=100,
             chunk_length=5,
             temperature=args.temperature,
             top_p=args.top_p,
