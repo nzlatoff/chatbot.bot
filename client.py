@@ -296,6 +296,7 @@ def reset_gen():
     print()
     return False
 
+
 def index_from_master():
 
     global BATCH_MSG_IND
@@ -847,6 +848,13 @@ def generate_mass():
     if not index_from_master():
         return reset_gen()
 
+    # batch skipped by master
+    if BATCH_MSG_IND == -2:
+        with LeLocle:
+            BATCH_MSG_IND = None
+            IS_GENERATING = False
+        return True
+
     if RESETTING:
         return reset_gen()
 
@@ -875,6 +883,7 @@ def generate_mass():
         IS_GENERATING = False
 
     return True
+
 
 # ----------------------------------------
 # generation: based on tokens
@@ -1033,6 +1042,12 @@ def generate_new():
 
     if not index_from_master():
         return reset_gen()
+
+    # batch skipped by master
+    if BATCH_MSG_IND == -2:
+        BATCH_MSG_IND = None
+        IS_GENERATING = False
+        return True
 
     if RESETTING:
         return reset_gen()
@@ -1354,6 +1369,10 @@ def set_message_choice(data):
     if data["id"] == sio.sid:
         with LeLocle:
             BATCH_MSG_IND = data["choice"]
+        if BATCH_MSG_IND == -2:
+            msg = (
+                f"(received batch choice: '-2' received, the master skipped this batch)"
+            )
         if BATCH_MSG_IND == -1:
             msg = f"(received batch choice: '-1' received, the bot will choose)"
         else:
