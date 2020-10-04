@@ -915,7 +915,8 @@ def generate_new():
 
     if RECEIVED_MSGS.size > 0:
         with LeLocle:
-            RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]  # removing last separators
+            if RECEIVED_MSGS.size > SEP_TKNS_LEN:
+                RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]  # removing last separators
             pprint(
                 "(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True
             )
@@ -1263,16 +1264,44 @@ def on_chat_message(data):
     added_seps = False
     if character:
         with LeLocle:
-            PREFIX = f"{PREFIX}{SEPARATORS}{character}\n{message}{END}"
-            RECEIVED_MSGS = np.concatenate(
-                (RECEIVED_MSGS, le_model.encode(f"{character}\n{message}"), SEP_TKNS)
-            )
-    else:
+            if args.mode == "legacy":
+                PREFIX = f"{PREFIX}{SEPARATORS}{character}\n{message}{END}"
+                if message:
+                    PREFIX = f"{PREFIX}\n{message}{END}"
+                else:
+                    PREFIX = f"{PREFIX}{END}"
+            else:
+                RECEIVED_MSGS = np.concatenate(
+                    (RECEIVED_MSGS, le_model.encode(f"{character}"))
+                )
+                if message:
+                    RECEIVED_MSGS = np.concatenate(
+                        (RECEIVED_MSGS, le_model.encode(f"\n{message}"), SEP_TKNS)
+                    )
+                else:
+                    RECEIVED_MSGS = np.concatenate(
+                        (RECEIVED_MSGS, SEP_TKNS)
+                    )
+    elif message:
         with LeLocle:
-            PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
-            RECEIVED_MSGS = np.concatenate(
-                (RECEIVED_MSGS, le_model.encode(f"{message}"), SEP_TKNS)
-            )
+            if args.mode == "legacy":
+                PREFIX = f"{PREFIX}{SEPARATORS}{message}{END}"
+            else:
+                RECEIVED_MSGS = np.concatenate(
+                    (RECEIVED_MSGS, le_model.encode(f"{message}"), SEP_TKNS)
+                )
+    else:
+        if args.mode == "legacy":
+            if len(PREFIX) == 0:
+                with LeLocle:
+                    PREFIX = f"{SEPARATORS}"
+        else:
+            if TKNS.size == 0:
+                print('RECEIVED NOTHING, KICKSTARTING')
+                with LeLocle:
+                    RECEIVED_MSGS = np.concatenate(
+                        (RECEIVED_MSGS, SEP_TKNS)
+                    )
 
     # pprint("(after reception, TKNS are now:)", sep="-", sp_bf=True)
     # print(TKNS[0], type(TKNS[0]))
@@ -1378,6 +1407,36 @@ def set_message_choice(data):
         else:
             msg = f"(received batch choice: message chosen: {BATCH_MSG_IND})"
         pprint(msg, sep="-", off="\t", sp_aft=True)
+
+
+@sio.on("server requests new batch")
+def gen_request(data):
+
+    global IS_GENERATING
+    global HAS_STARTED
+
+    if data["id"] == sio.sid:
+        # reactive mode, legacy or current
+        if args.mode in {"legacy", "reactive"}:
+            if not IS_GENERATING:
+                with LeLocle:
+                    IS_GENERATING = True
+                if args.mode == "legacy":
+                    generate()
+                    sleepy_times()
+                if args.mode == "reactive":
+                    generate_new()
+                    sleepy_times()
+            else:
+                pprint("(is generating, not answering...)", off="\t", sp_aft=True)
+        else:
+            if not HAS_STARTED:
+                with LeLocle:
+                    HAS_STARTED = True
+                if args.mode == "autonomous":
+                    auto_loop(generate_new)
+                elif args.mode == "optimizer":
+                    auto_loop(generate_mass)
 
 
 def send_typing(data):
