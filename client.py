@@ -806,6 +806,8 @@ def generate_mass():
                     sp_bf=True,
                 )
                 patience += 1
+            else:
+                patience = 0
 
             concat_chars = np.array(suitors["chars"] + chars)
             suitors["chars"] = list(concat_chars[n_best_indz][:n][sorted_indz])
@@ -868,7 +870,7 @@ def generate_mass():
     if RESETTING:
         return reset_gen()
 
-    if not fancy_tok_typing(data["trimmed"][BATCH_MSG_IND]):
+    if not fancy_tok_typing(suitors["trimmed"][BATCH_MSG_IND]):
         return reset_gen()
 
     if RESETTING:
@@ -1046,8 +1048,9 @@ def generate_new():
 
     # batch skipped by master
     if BATCH_MSG_IND == -2:
-        BATCH_MSG_IND = None
-        IS_GENERATING = False
+        with LeLocle:
+            BATCH_MSG_IND = None
+            IS_GENERATING = False
         return True
 
     if RESETTING:
@@ -1279,9 +1282,7 @@ def on_chat_message(data):
                         (RECEIVED_MSGS, le_model.encode(f"\n{message}"), SEP_TKNS)
                     )
                 else:
-                    RECEIVED_MSGS = np.concatenate(
-                        (RECEIVED_MSGS, SEP_TKNS)
-                    )
+                    RECEIVED_MSGS = np.concatenate((RECEIVED_MSGS, SEP_TKNS))
     elif message:
         with LeLocle:
             if args.mode == "legacy":
@@ -1297,11 +1298,9 @@ def on_chat_message(data):
                     PREFIX = f"{SEPARATORS}"
         else:
             if TKNS.size == 0:
-                print('RECEIVED NOTHING, KICKSTARTING')
+                pprint("(RECEIVED NOTHING, KICKSTARTING)", off="\t")
                 with LeLocle:
-                    RECEIVED_MSGS = np.concatenate(
-                        (RECEIVED_MSGS, SEP_TKNS)
-                    )
+                    TKNS = SEP_TKNS
 
     # pprint("(after reception, TKNS are now:)", sep="-", sp_bf=True)
     # print(TKNS[0], type(TKNS[0]))
@@ -1414,8 +1413,12 @@ def gen_request(data):
 
     global IS_GENERATING
     global HAS_STARTED
+    global TKNS
 
     if data["id"] == sio.sid:
+        if TKNS.size == 0:
+            with LeLocle:
+                TKNS = SEP_TKNS
         # reactive mode, legacy or current
         if args.mode in {"legacy", "reactive"}:
             if not IS_GENERATING:
