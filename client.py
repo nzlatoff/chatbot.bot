@@ -412,16 +412,9 @@ def preprocess_prefix():
     if not args.character:
 
         # if no char injected, inject before markers:
-        # - add hidden_after_char
+        # - add hidden_before_char
         # - add hidden_after_char
         # - markers
-
-        if args.hidden_after_char:
-            args.hidden_after_char = args.hidden_after_char.strip()
-            hidden_after_encoded = le_model.encode(f"\n{args.hidden_after_char}")
-            len_injections += len(hidden_after_encoded)
-            with LeLocle:
-                TKNS = np.concatenate((TKNS, hidden_after_encoded))
 
         if args.hidden_before_char:
             args.hidden_before_ch = args.hidden_before_char.strip()
@@ -429,6 +422,13 @@ def preprocess_prefix():
             len_injections += len(hidden_before_encoded)
             with LeLocle:
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
+
+        if args.hidden_after_char:
+            args.hidden_after_char = args.hidden_after_char.strip()
+            hidden_after_encoded = le_model.encode(f"\n{args.hidden_after_char}")
+            len_injections += len(hidden_after_encoded)
+            with LeLocle:
+                TKNS = np.concatenate((TKNS, hidden_after_encoded))
 
         # markers
         len_injections += SEP_TKNS_LEN
@@ -461,10 +461,10 @@ def preprocess_prefix():
         end_pref_after_injections = end_pref + len(char_encoded)
         if args.hidden_after_char:
             args.hidden_after_char = args.hidden_after_char.strip()
-            after_char_encoded = le_model.encode(f"{args.hidden_after_char} ")
+            after_char_encoded = le_model.encode(f"{args.hidden_after_char}")
             with LeLocle:
                 TKNS = np.concatenate((TKNS, after_char_encoded))
-            end_pref_after_injections += len(after_char_encoded)
+            # end_pref_after_injections += len(after_char_encoded)
 
     return end_pref_orig, end_pref, end_pref_after_injections
 
