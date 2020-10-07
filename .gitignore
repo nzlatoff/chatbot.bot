@@ -1,5 +1,10 @@
 # vim files
-*.swp
+*.sw*
 
 __pycache__
 .ipynb_checkpoints
+
+src
+models
+results
+checkpoint
