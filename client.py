@@ -165,7 +165,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--hidden_after_char",
+    "--inject_after_char",
     type=str,
     default="",
     help="""Additional text inserted at the start of each produced message,
@@ -413,7 +413,7 @@ def preprocess_prefix():
 
         # if no char injected, inject before markers:
         # - add hidden_before_char
-        # - add hidden_after_char
+        # - add inject_after_char
         # - markers
 
         if args.hidden_before_char:
@@ -423,12 +423,12 @@ def preprocess_prefix():
             with LeLocle:
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
 
-        if args.hidden_after_char:
-            args.hidden_after_char = args.hidden_after_char.strip()
-            hidden_after_encoded = le_model.encode(f"\n{args.hidden_after_char}")
-            len_injections += len(hidden_after_encoded)
+        if args.inject_after_char:
+            args.inject_after_char = args.inject_after_char.strip()
+            inject_after_encoded = le_model.encode(f"\n{args.inject_after_char}")
+            len_injections += len(inject_after_encoded)
             with LeLocle:
-                TKNS = np.concatenate((TKNS, hidden_after_encoded))
+                TKNS = np.concatenate((TKNS, inject_after_encoded))
 
         # markers
         len_injections += SEP_TKNS_LEN
@@ -459,9 +459,9 @@ def preprocess_prefix():
         with LeLocle:
             TKNS = np.concatenate((TKNS, char_encoded))
         end_pref_after_injections = end_pref + len(char_encoded)
-        if args.hidden_after_char:
-            args.hidden_after_char = args.hidden_after_char.strip()
-            after_char_encoded = le_model.encode(f"{args.hidden_after_char}")
+        if args.inject_after_char:
+            args.inject_after_char = args.inject_after_char.strip()
+            after_char_encoded = le_model.encode(f"{args.inject_after_char}")
             with LeLocle:
                 TKNS = np.concatenate((TKNS, after_char_encoded))
             # end_pref_after_injections += len(after_char_encoded)
@@ -1365,7 +1365,7 @@ def send_config():
             {
                 "character": args.character,
                 "hidden_before_char": args.hidden_before_char,
-                "hidden_after_char": args.hidden_after_char,
+                "inject_after_char": args.inject_after_char,
                 "wait_for_master": args.wait_for_master,
                 "sleepy_time": args.sleepy_time,
             }
