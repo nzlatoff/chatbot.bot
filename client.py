@@ -1021,10 +1021,10 @@ def generate_new():
 
     pprint("(done!)", off="\t\t", sp_bf=True, sp_aft=True)
 
-    # sort the sequences
-    sorted_indz = np.argsort(data["perplexities"], axis=0).flatten()
-    data["perplexities"] = data["perplexities"][sorted_indz]
-    data["tokens"] = np.asarray(data["tokens"])[sorted_indz]
+    # sort the sequences, if the batch_size is greater than 1
+    if args.batch_size > 1:
+        sorted_indz = np.argsort(data["perplexities"], axis=0).flatten()
+        data["perplexities"] = data["perplexities"][sorted_indz]
 
     generated, data["trimmed"] = trim_tokens(
         data["tokens"], end_pref, end_pref_after_injections
