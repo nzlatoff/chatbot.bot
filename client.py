@@ -646,6 +646,7 @@ def auto_loop(fn):
 
 def generate_mass():
 
+    global TKNS_LEN_THRESHOLD
     global IS_GENERATING
     global RECEIVED_MSGS
     global BATCH_MSG_IND
@@ -668,6 +669,16 @@ def generate_mass():
             RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]  # removing last separators
             TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
             RECEIVED_MSGS = np.array([], np.int32)
+
+    if TKNS_LEN_THRESHOLD and TKNS.size >= TKNS_LEN_THRESHOLD:
+        pprint(
+            "(REACHED THRESHOLD LENGTH, TRIMMING)",
+            sp_bf=True,
+            off="\t\t\t",
+            sp_aft=True,
+        )
+        with LeLocle:
+            TKNS = TKNS[-TKNS_LEN_THRESHOLD:]
 
     if RESETTING:
         return reset_gen()
