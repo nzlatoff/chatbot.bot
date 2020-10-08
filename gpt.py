@@ -2,7 +2,6 @@ from tensorflow.core.protobuf import rewriter_config_pb2
 from collections import defaultdict
 from operator import itemgetter
 from print_utils import term
-import tensorflow as tf
 import numpy as np
 import encoder_hug
 import encoder
@@ -14,11 +13,13 @@ import sys
 import os
 import gc
 
-# PYTHONPATH=src python bridges.py
-
 # disabling some warnings
+# update: https://stackoverflow.com/a/38873777
 os.environ["KMP_WARNINGS"] = "off"
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # or any {'0', '1', '2'}
 
+import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.DEBUG)  # or any {DEBUG, INFO, WARN, ERROR, FATAL}
 
 class Model:
     def __init__(
