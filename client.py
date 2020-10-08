@@ -5,11 +5,13 @@ from base64 import b64encode
 from threading import Lock
 from gpt import Model
 import numpy as np
+import traceback
 import socketio
 import argparse
 import random
 import regex
 import time
+import sys
 
 # for random_threshold arg below
 # https://stackoverflow.com/a/12117065
@@ -517,7 +519,9 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 
     send_three_dots()
 
-    pprint(f"O.O.O.P.S. What ocurred during {fn_name}? {repr(e)}", sep="=", sp_bf=True)
+    pprint(f"O.O.O.P.S. What ocurred during {fn_name}?", sep="=", sp_bf=True)
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
     if type(e).__name__ == "ResourceExhaustedError":
         pprint(f"! DANGEROUS LENGTH REACHED ! Trimming by {trimming_factor}.",)
 
@@ -601,13 +605,17 @@ def try_catch_wrapper(fn):
             return False
     except Exception as e:
         pprint(
-            f"0.0.0.P.S. in function {fn.__name__}: random_wall: {e}, resetting generation.",
+            f"0.0.0.P.S. in function {fn.__name__}:",
             sp_bf=True,
             sep="=",
             sp_aft=True,
             sep_aft="=",
             off="\t",
         )
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
+        print(exc_type, exc_type == 'ValueError')
+        pprint("(thinking is being stopped)", sp_bf=True, sp_aft=True, sep_aft="=")
         with LeLocle:
             BATCH_MSG_IND = None
             IS_GENERATING = False
