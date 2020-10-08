@@ -102,7 +102,7 @@ class Model:
         print_tokens=False,
     ):
 
-        """# {{{
+        """ # {{{
         Highest level function, simply prints generated texts. Invokes self.gen().
         Parameters:
         -----------
@@ -130,7 +130,7 @@ class Model:
             not passing a string as prefix.
         print_tokens:
             boolean. Print raw tokens instead of decoding them to strings.
-        """# }}}
+        """ # }}}
 
         for seq in self.gen(
             prefix=prefix,
@@ -148,7 +148,7 @@ class Model:
         self, prefix="\n", past=None, length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None,
     ):
 
-        """# {{{
+        """ # {{{
         Higher level generation: input a sentence, get an array with n batches
         of continuations.
         Parameters:
@@ -183,7 +183,7 @@ class Model:
             sequences: the decoded generated sequences.
             tokens: the generated tokens.
             logits: all the scores for all tokens at each step.
-        """# }}}
+        """ # }}}
 
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
         if past is None:
@@ -232,7 +232,7 @@ class Model:
         batch_size=None,
     ):
 
-        """# {{{
+        """ # {{{
         Generate sequences until a special token (e.g. "<|endoftext|>") or a
         regex is found. The resulting sequences will not be of the same length.
         Beware, when using the string version of until, not to
@@ -296,7 +296,7 @@ class Model:
                 sequences: the generated sequences found.
         NOTE: as the results differ in length, the return type will be pure
         Python lists, and not numpy arrays.
-        """  # }}}
+        """ # }}}
 
         pref_data = self._check_prefix(prefix, batch_size)
         prefix, prefix_enc, context_tkns = itemgetter(
@@ -415,7 +415,7 @@ class Model:
         batch_size=None,
     ):
 
-        """# {{{
+        """ # {{{
         Generate beginnings of sequences avoiding a certain token. Useful when
         wanting continuations despite the fact that a likely outcome from the
         network's perspective is an end token. This function allows to generate
@@ -470,7 +470,7 @@ class Model:
             scores_range: the range of scores, shape: (batch_size, 1)
             scores_mean: the mean of scores, shape: (batch_size, 1)
             scores_std: the standard deviation of scores, shape: (batch_size, 1)
-        """# }}}
+        """ # }}}
 
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
         gen_tkns = []
@@ -556,7 +556,7 @@ class Model:
         return_ranks=True,
     ):
 
-        """# {{{
+        """ # {{{
         Lower level generation: input a sentence, get n batches of generated
         tokens as well as the logits associated with each step.
         Parameters:
@@ -618,7 +618,7 @@ class Model:
                 ranks_range: the range of ranks, shape: (batch_size, 1)
                 ranks_mean: the mean of ranks, shape: (batch_size, 1)
                 ranks_std: the standard deviation of ranks, shape: (batch_size, 1)
-        """# }}}
+        """ # }}}
 
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
         tkns, logits = self.sess.run(
@@ -789,7 +789,7 @@ class Model:
 
     def _check_prefix(self, prefix, batch_size):
 
-        """# {{{
+        """ # {{{
         Check whether prefix is a string or a list of tokens (for parallel
         generation). If passing tokens as prefix all sequences must have the
         same length. This will set the batch size according to either:
@@ -810,7 +810,7 @@ class Model:
                 different)
             context_tkns: the context tokens, a batch of shape (batch_size, n_tokens),
                 ready to be fed to the network
-        """  # }}}
+        """ # }}}
 
         if isinstance(prefix, np.ndarray):
             if isinstance(prefix[0], np.integer):
@@ -1015,7 +1015,7 @@ class Model:
 
     def step(self, tokens, past=None):
 
-        """# {{{
+        """ # {{{
         One step of Transformation.
         Inputs:
         -------
@@ -1031,7 +1031,7 @@ class Model:
             presents: the attention matrices, shape:
                 [batch_size, n_layer, 2, n_head, sequence, n_embd // n_head]
                 (see model.past_shape and default_hparams())
-        """  # }}}
+        """ # }}}
 
         lm_output = self.model(
             hparams=self.hparams, X=tokens, past=past, reuse=tf.compat.v1.AUTO_REUSE
@@ -1050,7 +1050,7 @@ class Model:
         self, length=5, context=None, temperature=1, top_k=0, top_p=0.0,
     ):
 
-        """# {{{
+        """ # {{{
         The Sample loop, using tf.while(), see:
         https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/while_loop
         The while loop must be constructed functionally, hence the
@@ -1091,7 +1091,7 @@ class Model:
         all_logits: probabilities for the next token at each step
                     shape: (batch_size, n_tokens, n_vocab)
         all_scores: probabilities at each step for the sampled tokens
-        """  # }}}
+        """ # }}}
 
         with tf.name_scope("sample_sequence"):
             # Don't feed the last context token -- leave that to the loop below
@@ -1176,7 +1176,7 @@ class Model:
 
     def _stats(self, arr, name=None):
 
-        """# {{{
+        """ # {{{
         Parameters:
         -----------
         arr: an array/tuple/np.array of batch_size arrays/tuples/np.arrays.
@@ -1188,7 +1188,7 @@ class Model:
             range: the range, shape: (batch_size, 1)
             mean: the mean, shape: (batch_size, 1)
             std: the standard deviation, shape: (batch_size, 1)
-        """  # }}}
+        """ # }}}
 
         if name and name[-1] != "_":
             name = f"{name}_"
@@ -1228,7 +1228,7 @@ class Model:
 
     def _perplexities(self, scores, stats=False):
 
-        """# {{{
+        """ # {{{
         Compute the perplexity given a batch of scores (computed by
         self.run()).
         Parameters:
@@ -1244,7 +1244,7 @@ class Model:
             scores_range: the range of scores, shape: (batch_size, 1)
             scores_mean: the mean of scores, shape: (batch_size, 1)
             scores_std: the standard deviation of scores, shape: (batch_size, 1)
-        """  # }}}
+        """ # }}}
 
         if stats:
             return {
@@ -1258,7 +1258,7 @@ class Model:
 
     def _ranks(self, probs, scores, stats=False):
 
-        """# {{{
+        """ # {{{
         Compute the rank of tokens for a batch of (freshly generated) input seqences(s).
         Note: this assumes equal lengths for sequences.
         Parameters
@@ -1274,7 +1274,7 @@ class Model:
             ranks_range: the range of ranks, shape: (batch_size, 1)
             ranks_mean: the mean of ranks, shape: (batch_size, 1)
             ranks_std: the standard deviation of ranks, shape: (batch_size, 1)
-        """  # }}}
+        """ # }}}
 
         logits_sorted = np.sort(probs)[..., ::-1]  # descending order
         ranks = np.where(logits_sorted == scores[..., None])[-1]
@@ -1293,7 +1293,7 @@ class Model:
 
     def get_logits(self, context_tokens, last_only=False, verbose=True):
 
-        """# {{{
+        """ # {{{
         Generate the logits (probabilities of each token) at each step for a
         given one or more sequences of tokens. If computing logits for a batch
         of tokens, said batch must have been padded beforehand (all token
@@ -1302,7 +1302,7 @@ class Model:
         --------
         logits: array of shape: (batch_size, n_tokens, n_vocab)
                 or, if last_only is True: (batch_size, 1, n_vocab)
-        """  # }}}
+        """ # }}}
 
         if not isinstance(context_tokens[0], (list, tuple, np.ndarray)):
             self._check_batch_size(1, verbose=verbose)
@@ -1343,7 +1343,7 @@ class Model:
 
     def get_rank(self, sequences=["\n"], verbose=False):
 
-        """# {{{
+        """ # {{{
         Compute the rank of tokens for input sentence(s). Note: this assumes
         unequal lengths for sentences. For freshly neuroned batches of equal
         lengths, use the logits returned by self.run() and pass them to
@@ -1364,7 +1364,7 @@ class Model:
             ranks_range: the range of ranks, shape: (n_sequences, 1)
             ranks_mean: the mean of ranks, shape: (n_sequences, 1)
             ranks_std: the standard deviation of ranks, shape: (n_sequences, 1)
-        """  # }}}
+        """ # }}}
 
         if verbose:
             msg = "calculating ranks of existing sentences:"
@@ -1419,7 +1419,7 @@ class Model:
         self, sequences=["\n"], verbose=False,
     ):
 
-        """# {{{
+        """ # {{{
         Compute perplexity score(s) for input sentence(s). Note: this assumes
         unequal lengths for sentences. For freshly neuroned batches of equal
         lengths, use the scores returned by self.run() and pass them to
@@ -1442,7 +1442,7 @@ class Model:
             scores_range: the range of scores, shape: (n_sequences, 1)
             scores_mean: the mean of scores, shape: (n_sequences, 1)
             scores_std: the standard deviation of scores, shape: (n_sequences, 1)
-        """  # }}}
+        """ # }}}
 
         if verbose:
             msg = "calculating perplexity of existing sentences:"
