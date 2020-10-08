@@ -13,6 +13,9 @@ import sys
 import os
 import gc
 
+# numpy cosmetics
+np.set_printoptions(formatter={"all":lambda x: f"{str(x):>{5}}"})
+
 # disabling some warnings
 # update: https://stackoverflow.com/a/38873777
 os.environ["KMP_WARNINGS"] = "off"
@@ -323,9 +326,7 @@ class Model:
                     chunk_length=chunk_length,
                     exclude_until=exclude_until,
                 )
-                msg = f"\t\t{tkns[:, -chunk_length:]}".replace("\n", "")[
-                    : term.width - 16
-                ]
+                msg = f"{tkns[:, -chunk_length:]}".replace("\n", "")[: term.width]
                 print(msg)
                 context_tkns = tkns
                 i += 1
