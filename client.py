@@ -519,9 +519,7 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 
     pprint(f"O.O.O.P.S. What ocurred during {fn_name}? {repr(e)}", sep="=", sp_bf=True)
     if type(e).__name__ == "ResourceExhaustedError":
-        pprint(
-            f"! DANGEROUS LENGTH REACHED ! Trimming by {trimming_factor}, in case.",
-        )
+        pprint(f"! DANGEROUS LENGTH REACHED ! Trimming by {trimming_factor}.",)
 
         two_thirds = int(end_pref_orig * trimming_factor)
 
@@ -588,10 +586,33 @@ def process_received_messages():
         pprint("(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True)
         pprint(le_model.decode(RECEIVED_MSGS), off="\t\t\t", sp_aft=True)
         with LeLocle: # removing last separators
-            RECEIVED_MSGS = RECEIVED_MSGS[ :-SEP_TKNS_LEN]
+            RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]
             TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
             RECEIVED_MSGS = np.array([], np.int32)
 
+
+def try_catch_wrapper(fn):
+
+    global BATCH_MSG_IND
+    global IS_GENERATING
+
+    try:
+        if not fn():
+            return False
+    except Exception as e:
+        pprint(
+            f"0.0.0.P.S. in function {fn.__name__}: random_wall: {e}, resetting generation.",
+            sp_bf=True,
+            sep="=",
+            sp_aft=True,
+            sep_aft="=",
+            off="\t",
+        )
+        with LeLocle:
+            BATCH_MSG_IND = None
+            IS_GENERATING = False
+        return False
+    return True
 
 def le_random_wall(fn):
     global IS_GENERATING
@@ -601,7 +622,7 @@ def le_random_wall(fn):
         pprint(
             "(le grreat rrrandom is bountiful, let's generate)", off="\t", sp_aft=True
         )
-        if not fn():
+        if not try_catch_wrapper(fn):
             return False
     else:
         pprint("(nope, the wall of random could not be passed)", off="\t", sp_aft=True)
@@ -621,7 +642,7 @@ def le_warning(has_warned):
 def sleepy_times():
     r = np.random.uniform(1, 1 + args.sleepy_time)
     pprint(
-        f"(sleepy timezz for {args.server_name}: rrandom gave me {r} second(s) to sleep.)",
+        f"(sleepy timezz for {args.server_name}: {r} seconds.)",
         sep="-",
         sp_bf=True,
     )
@@ -1430,10 +1451,10 @@ def gen_request(data):
                 with LeLocle:
                     IS_GENERATING = True
                 if args.mode == "legacy":
-                    generate()
+                    try_catch_wrapper(generate)
                     sleepy_times()
                 if args.mode == "reactive":
-                    generate_new()
+                    try_catch_wrapper(generate_new)
                     sleepy_times()
             else:
                 pprint("(is generating, not answering...)", off="\t", sp_aft=True)
