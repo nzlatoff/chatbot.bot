@@ -518,7 +518,7 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
     send_three_dots()
 
     pprint(
-        f"O.O.O.P.S. A problem ocurred during {fn_name}: {repr(e)} (type: {type(e)})",
+        f"O.O.O.P.S. A problem ocurred during {fn_name}: {repr(e)} (type: {type(e).__name__})",
         sep="=",
         sp_bf=True,
     )
