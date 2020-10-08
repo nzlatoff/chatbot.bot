@@ -18,7 +18,7 @@ def print_config(args):
 
 
 def pprint(
-    msg, width=80, off="", sep="", sep_aft="", sp_bf=False, sp_aft=False, und=False
+    msg, width=term.width, off="", sep="", sep_aft="", sp_bf=False, sp_aft=False, und=False
 ):
     if sp_bf:
         print()
