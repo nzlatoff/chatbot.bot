@@ -146,7 +146,7 @@ class Model:
         print("-" * 40)
 
     def gen(
-        self, prefix="\n", past=None, length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None,
+        self, prefix="\n", length=5, temperature=1, top_k=0, top_p=0.0, batch_size=None,
     ):
 
         """ # {{{
@@ -187,37 +187,23 @@ class Model:
         """ # }}}
 
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
-        if past is None:
-            results = self.sess.run(
-                self.output,
-                feed_dict={
-                    self.length: length,
-                    self.context: context_tkns,
-                    self.temperature: temperature,
-                    self.top_k: top_k,
-                    self.top_p: top_p,
-                },
-            )
-        else:
-            results = self.sess.run(
-                self.output,
-                feed_dict={
-                    self.length: length,
-                    self.context: context_tkns,
-                    self.past: past,
-                    self.temperature: temperature,
-                    self.top_k: top_k,
-                    self.top_p: top_p,
-                },
-            )
-        tkns, logits, past = itemgetter("tokens", "logits", "past")(results)
+        results = self.sess.run(
+            self.output,
+            feed_dict={
+                self.length: length,
+                self.context: context_tkns,
+                self.temperature: temperature,
+                self.top_k: top_k,
+                self.top_p: top_p,
+            },
+        )
+        tkns, logits = itemgetter("tokens", "logits")(results)
         return {
             "sequences": self.decode(tkns)
             if not self.reverse
             else self.decode(tkns[:, ::-1]),
             "tokens": tkns if not self.reverse else tkns[:, ::-1],
             "logits": logits if not self.reverse else logits[:, ::-1],
-            "past": past,
         }
 
     def gen_until(
@@ -319,7 +305,7 @@ class Model:
             while i < sanity_limit and not all(
                 s["index"] is not None for s in batch_data
             ):
-                tkns, logits = self.sess.run(
+                results = self.sess.run(
                     self.output,
                     feed_dict={
                         self.length: chunk_length,
@@ -329,6 +315,7 @@ class Model:
                         self.top_p: top_p,
                     },
                 )
+                tkns, logits = itemgetter("tokens", "logits")(results)
                 batch_data = self._find_token(
                     until,
                     tkns,
@@ -386,7 +373,7 @@ class Model:
             while i < sanity_limit and not all(
                 s["index"] is not None for s in batch_data
             ):
-                tkns, _ = self.sess.run(
+                results = self.sess.run(
                     self.output,
                     feed_dict={
                         self.length: chunk_length,
@@ -396,6 +383,7 @@ class Model:
                         self.top_p: top_p,
                     },
                 )
+                tkns, logits = itemgetter("tokens", "logits")(results)
                 batch_data = self._find_regex(
                     until, tkns, batch_data, exclude_until=exclude_until
                 )
@@ -480,7 +468,7 @@ class Model:
         cond = None
         i = 0
         while not cond:
-            tkns, logits = self.sess.run(
+            results = self.sess.run(
                 self.output,
                 feed_dict={
                     self.length: length,
@@ -490,6 +478,7 @@ class Model:
                     self.top_p: top_p,
                 },
             )
+            tkns, logits = itemgetter("tokens", "logits")(results)
             i += 1
             if i > sanity_limit:
                 break
@@ -623,7 +612,7 @@ class Model:
         """ # }}}
 
         context_tkns = self._check_prefix(prefix, batch_size)["context_tkns"]
-        tkns, logits = self.sess.run(
+        results = self.sess.run(
             self.output,
             feed_dict={
                 self.length: length,
@@ -633,6 +622,7 @@ class Model:
                 self.top_p: top_p,
             },
         )
+        tkns, logits = itemgetter("tokens", "logits")(results)
         data = {
             "sequences": self.decode(tkns)
             if not self.reverse
@@ -1163,7 +1153,10 @@ class Model:
                 back_prop=False,
             )
 
-            return tokens, all_logits
+            return {
+                "tokens": tokens,
+                "logits": all_logits,
+            }
 
     # --------------------------------------------------------------------------------
     # Perplexity works:
