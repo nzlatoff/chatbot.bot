@@ -559,6 +559,22 @@ def trim_tokens(tkns, end_pref, end_pref_after_injections):
         generated = [seq.strip() for seq in le_model.decode(trimmed)]
     return generated, trimmed
 
+# https://stackoverflow.com/a/61421479
+def unequal_lists_of_lists_to_np(a, b):
+    if isinstance(a, list):
+        l_a = len(a)
+    else:
+        a.shape[0]
+        a = list(a)
+    if isinstance(b, list):
+        l_b = len(b)
+    else:
+        b.shape[0]
+        b = list(b)
+    container = np.empty(l_a + l_b, dtype=object)
+    container[:l_a] = a
+    container[l_a:] = b
+    return container
 
 def extract_chars_msgs(generated, data):
     chars = []
@@ -806,6 +822,7 @@ def generate_mass():
 
             suitors["chars"] = chars
             suitors["messages"] = messages
+            suitors["trimmed"] = data["trimmed"]
 
             if RESETTING:
                 return reset_gen()
@@ -824,7 +841,7 @@ def generate_mass():
             former_suitors = set([t.tostring() for t in suitors["tokens"]])
 
             # use same partition to extract the sequences
-            concat_seqs = np.array(suitors["tokens"] + data["tokens"])
+            concat_seqs = unequal_lists_of_lists_to_np(suitors["tokens"], data["tokens"])
             suitors["tokens"] = list(concat_seqs[n_best_indz][:n][sorted_indz])
 
             generated, data["trimmed"] = trim_tokens(
@@ -852,10 +869,12 @@ def generate_mass():
             else:
                 patience = 0
 
-            concat_chars = np.array(suitors["chars"] + chars)
+            concat_chars = unequal_lists_of_lists_to_np(suitors["chars"], chars)
             suitors["chars"] = list(concat_chars[n_best_indz][:n][sorted_indz])
-            concat_messages = np.array(suitors["messages"] + messages)
+            concat_messages = unequal_lists_of_lists_to_np(suitors["messages"], messages)
             suitors["messages"] = list(concat_messages[n_best_indz][:n][sorted_indz])
+            concat_trimmed = unequal_lists_of_lists_to_np(suitors["trimmed"], data["trimmed"])
+            suitors["trimmed"] = list(concat_trimmed[n_best_indz][:n][sorted_indz])
 
             pprint("(current selection)", off="\t", sep="-", sp_bf=True, sp_aft=True)
             for i in range(n):
