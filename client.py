@@ -499,14 +499,14 @@ def select_in_batch(data, chars, messages):
         )
         pprint(char)
         pprint(message)
-        pprint(f"(perp: {data['perplexities'][BATCH_MSG_IND].item()})")
+        pprint(f"(perplexity: {data['perplexities'][BATCH_MSG_IND].item()})")
     else:
         char = chars[BATCH_MSG_IND]
         message = messages[BATCH_MSG_IND]
         pprint(f"({args.server_name} sending le master's choice)", sep="-", sp_bf=True)
         pprint(char)
         pprint(message)
-        pprint(f"(perp: {data['perplexities'][BATCH_MSG_IND].item()})")
+        pprint(f"(perplexity: {data['perplexities'][BATCH_MSG_IND].item()})")
     return char, message
 
 
@@ -517,30 +517,27 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 
     send_three_dots()
 
-    pprint(
-        f"O.O.O.P.S. A problem ocurred during {fn_name}: {repr(e)} (type: {type(e).__name__})",
-        sep="=",
-        sp_bf=True,
-    )
-    pprint(
-        f"! PERHAPS DANGEROUS LENGTH REACHED ? Trimming by {trimming_factor}, in case.",
-    )
+    pprint(f"O.O.O.P.S. What ocurred during {fn_name}? {repr(e)}", sep="=", sp_bf=True)
+    if type(e).__name__ == "ResourceExhaustedError":
+        pprint(
+            f"! DANGEROUS LENGTH REACHED ! Trimming by {trimming_factor}, in case.",
+        )
 
-    two_thirds = int(end_pref_orig * trimming_factor)
+        two_thirds = int(end_pref_orig * trimming_factor)
 
-    old_len = len(TKNS)
-    next_len = old_len - 50
-    with LeLocle:
-        TKNS_LEN_THRESHOLD = next_len if next_len > 10 else old_len
+        old_len = len(TKNS)
+        next_len = old_len - 50
+        with LeLocle:
+            TKNS_LEN_THRESHOLD = next_len if next_len > 10 else old_len
 
-    with LeLocle:
-        TKNS = TKNS[two_thirds:]
-    pprint(
-        f"(Length was {old_len}, is now: {old_len - two_thirds}, capped to {TKNS_LEN_THRESHOLD} from now on, will also sleep for a bit while I'm at it...)",
-        sp_aft=True,
-        sep_aft="=",
-    )
-    time.sleep(sleep_for)
+        with LeLocle:
+            TKNS = TKNS[two_thirds:]
+        pprint(
+            f"(Length was {old_len}, is now: {old_len - two_thirds}, capped to {TKNS_LEN_THRESHOLD} from now on, will also sleep for a bit while I'm at it...)",
+            sp_aft=True,
+            sep_aft="=",
+        )
+        time.sleep(sleep_for)
 
 
 def trim_tokens(tkns, end_pref, end_pref_after_injections):
@@ -574,7 +571,7 @@ def extract_chars_msgs(generated, data):
 
         pprint(char, off="\t")
         pprint(message, off="\t")
-        pprint(f"(perp: {data['perplexities'][i].item()})", off="\t")
+        pprint(f"(perplexity: {data['perplexities'][i].item()})", off="\t")
         pprint("*", off="\t")
 
         chars.append(char)
@@ -726,7 +723,7 @@ def generate_mass():
         pprint("(gen avoiding)", off="\t\t", sep="-", sp_bf=True, sp_aft=True)
         for i, tkn in enumerate(data["tokens"]):
             pprint(le_model.decode(tkn[end_pref_orig:]).strip(), off="\t\t")
-            pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t")
+            pprint(f"(perplexity: {data['perplexities'][i].item()})", off="\t\t")
             pprint("*", off="\t\t")
 
         if RESETTING:
@@ -835,7 +832,7 @@ def generate_mass():
             for i in range(n):
                 pprint(suitors["chars"][i], off="\t")
                 pprint(suitors["messages"][i], off="\t")
-                pprint(f"(perp: {suitors['perplexities'][i].item()})", off="\t")
+                pprint(f"(perplexity: {suitors['perplexities'][i].item()})", off="\t")
                 pprint("*", off="\t")
 
             if RESETTING:
@@ -985,7 +982,7 @@ def generate_new():
     pprint("(done!)", off="\t\t", sp_aft=True)
     for i, tkn in enumerate(data["tokens"]):
         pprint(le_model.decode(tkn[end_pref_orig:]).strip(), off="\t\t")
-        pprint(f"(perp: {data['perplexities'][i].item()})", off="\t\t")
+        pprint(f"(perplexity: {data['perplexities'][i].item()})", off="\t\t")
         pprint("*", off="\t\t")
 
     if RESETTING:
