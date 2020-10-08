@@ -582,6 +582,20 @@ def extract_chars_msgs(generated, data):
     return chars, messages
 
 
+def process_received_messages():
+
+    global RECEIVED_MSGS
+    global TKNS
+
+    if RECEIVED_MSGS.size > SEP_TKNS_LEN:
+        pprint("(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True)
+        pprint(le_model.decode(RECEIVED_MSGS), off="\t\t\t", sp_aft=True)
+        with LeLocle: # removing last separators
+            RECEIVED_MSGS = RECEIVED_MSGS[ :-SEP_TKNS_LEN]
+            TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
+            RECEIVED_MSGS = np.array([], np.int32)
+
+
 def le_random_wall(fn):
     global IS_GENERATING
     rand = random.random()
@@ -660,15 +674,7 @@ def generate_mass():
     if RESETTING:
         return reset_gen()
 
-    if RECEIVED_MSGS.size > 0:
-        pprint("(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True)
-        pprint(
-            le_model.decode(RECEIVED_MSGS[:-SEP_TKNS_LEN]), off="\t\t\t", sp_aft=True
-        )
-        with LeLocle:
-            RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]  # removing last separators
-            TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
-            RECEIVED_MSGS = np.array([], np.int32)
+    process_received_messages()
 
     if TKNS_LEN_THRESHOLD and TKNS.size >= TKNS_LEN_THRESHOLD:
         pprint(
@@ -926,16 +932,7 @@ def generate_new():
     if RESETTING:
         return reset_gen()
 
-    if RECEIVED_MSGS.size > 0:
-        with LeLocle:
-            if RECEIVED_MSGS.size > SEP_TKNS_LEN:
-                RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]  # removing last separators
-            pprint(
-                "(appending received messages)", sp_bf=True, off="\t\t\t", sp_aft=True
-            )
-            pprint(le_model.decode(RECEIVED_MSGS), off="\t\t\t", sp_aft=True)
-            TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
-            RECEIVED_MSGS = np.array([], np.int32)
+    process_received_messages()
 
     if TKNS_LEN_THRESHOLD and TKNS.size >= TKNS_LEN_THRESHOLD:
         pprint(
