@@ -507,9 +507,8 @@ class Model:
         cond = None
         i = 0
 
-        assert (
-            isinstance(avoiding, int) and avoiding <
-            self.hparams.get('n_vocab')
+        assert isinstance(avoiding, int) and avoiding < self.hparams.get(
+            "n_vocab"
         ), f"{until} is not in the vocab, try m.encode('avoiding') first, make sure only one token is generated"
 
         while not cond:
@@ -1037,7 +1036,13 @@ class Model:
         A dummy runs forces some libraries to open at the onset of the program,
         clearing out messages and warnings.
         """
-        self.run("A", length=1, batch_size=self.batch_size)
+        self.run(
+            "A",
+            length=1,
+            batch_size=self.batch_size,
+            # return_perplexities=False,
+            # return_ranks=False,
+        )
 
     def clear_line(self):
         # https://stackoverflow.com/a/943921
@@ -1295,10 +1300,10 @@ class Model:
                 body=body,
                 maximum_iterations=length,
                 loop_vars=[
-                    context_output["logits"],   # all logits
-                    context_output["presents"], # pasts/presents
-                    context[:, -1],             # prev
-                    context,                    # output
+                    context_output["logits"],  # all logits
+                    context_output["presents"],  # pasts/presents
+                    context[:, -1],  # prev
+                    context,  # output
                 ],
                 shape_invariants=[
                     # all logits
