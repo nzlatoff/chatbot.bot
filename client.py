@@ -401,15 +401,15 @@ def preprocess_prefix():
     end_pref_after_injections = end_pref_orig
     len_injections = 0
 
-    # pprint("(tkns)", sep="-", sp_bf=True) 
-    # pprint(str(TKNS), sp_aft=True) 
+    # pprint("(tkns)", sep="-", sp_bf=True)
+    # pprint(str(TKNS), sp_aft=True)
 
     if TKNS.size > SEP_TKNS_LEN:
-        pprint("(currently in memory:)", sp_bf=True, sp_aft=True)  
-        pprint(le_model.decode(TKNS).strip(), sp_aft=True)  
-        pprint(f"(length: {end_pref_orig})")  
+        pprint("(currently in memory:)", sp_bf=True, sp_aft=True)
+        pprint(le_model.decode(TKNS).strip(), sp_aft=True)
+        pprint(f"(length: {end_pref_orig})")
     else:
-        pprint("(nothing in memory!)", sp_bf=True)  
+        pprint("(nothing in memory!)", sp_bf=True)
 
     if not args.character:
 
@@ -580,7 +580,7 @@ def unequal_lists_of_lists_to_np(a, b):
 
 def extract_chars_msgs(generated, data):
 
-    # pprint("(generated)", sep="-", sp_bf=True, sp_aft=True) 
+    # pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
 
     chars = []
     messages = []
@@ -592,11 +592,11 @@ def extract_chars_msgs(generated, data):
             char = g[: g.find("\n")].strip()
             message = g[g.find("\n") + 1 :].strip()
 
-        # pprint(char) 
-        # pprint(message) 
-        # pprint(f"(perplexity: {data['perplexities'][i].item()})") 
+        # pprint(char)
+        # pprint(message)
+        # pprint(f"(perplexity: {data['perplexities'][i].item()})")
         # if args.batch_size > 1 and i < args.batch_size - 1:
-        #     pprint("*") 
+        #     pprint("*")
 
         chars.append(char)
         messages.append(message)
@@ -609,8 +609,8 @@ def process_received_messages():
     global TKNS
 
     if RECEIVED_MSGS.size > SEP_TKNS_LEN:
-        # pprint("(appending received messages)", sp_bf=True, sp_aft=True) 
-        # pprint(le_model.decode(RECEIVED_MSGS), sp_aft=True) 
+        # pprint("(appending received messages)", sp_bf=True, sp_aft=True)
+        # pprint(le_model.decode(RECEIVED_MSGS), sp_aft=True)
         with LeLocle:  # removing last separators
             RECEIVED_MSGS = RECEIVED_MSGS[:-SEP_TKNS_LEN]
             TKNS = np.concatenate((TKNS, RECEIVED_MSGS))
@@ -646,17 +646,17 @@ def try_catch_wrapper(fn):
 def le_random_wall(fn):
     global IS_GENERATING
     rand = random.random()
-    pprint(f"(random has spoken: {rand})", sp_bf=True)  
+    pprint(f"(random has spoken: {rand})", sp_bf=True)
     if rand > args.random_threshold:
         pprint(
             "(le grreat rrrandom is bountiful, let's think)",
-        ) 
+        )
         if not try_catch_wrapper(fn):
             return False
     else:
         pprint(
             "(nope, the wall of random could not be passed)", sp_aft=True
-        )  
+        )
         with LeLocle:
             IS_GENERATING = False
     return True
@@ -762,8 +762,8 @@ def generate_mass():
         # first produce a small bit avoiding the end token
         try:
             data = le_model.gen_avoiding(
-                prefix=TKNS,
-                avoiding=le_model.encode("<|e|>"),
+                prefix=[TKNS] * args.batch_size,
+                avoiding=le_model.encode("<|e|>")[0],
                 length=10,
                 temperature=args.temperature,
                 top_k=args.top_k,
@@ -775,12 +775,12 @@ def generate_mass():
             handle_error("gen_avoiding", end_pref_orig, e)
             return reset_gen()
 
-        # pprint("(gen avoiding)", sep="-", sp_bf=True, sp_aft=True)  
+        # pprint("(gen avoiding)", sep="-", sp_bf=True, sp_aft=True)
         # for i, tkn in enumerate(data["tokens"]):
-        #     pprint(le_model.decode(tkn[end_pref_orig:]).strip())  
-        #     pprint(f"(perplexity: {data['perplexities'][i].item()})")  
+        #     pprint(le_model.decode(tkn[end_pref_orig:]).strip())
+        #     pprint(f"(perplexity: {data['perplexities'][i].item()})")
         #     if args.batch_size > 1:
-        #         pprint("*")  
+        #         pprint("*")
 
         if RESETTING:
             return reset_gen()
@@ -821,7 +821,7 @@ def generate_mass():
             if RESETTING:
                 return reset_gen()
 
-            # pprint("(generated)", sep="-", sp_bf=True, sp_aft=True) 
+            # pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
 
             if RESETTING:
                 return reset_gen()
@@ -859,7 +859,7 @@ def generate_mass():
             if RESETTING:
                 return reset_gen()
 
-            # pprint("(generated)", sep="-", sp_bf=True, sp_aft=True) 
+            # pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
 
             if RESETTING:
                 return reset_gen()
@@ -882,15 +882,15 @@ def generate_mass():
             concat_trimmed = unequal_lists_of_lists_to_np(suitors["trimmed"], data["trimmed"])
             suitors["trimmed"] = list(concat_trimmed[n_best_indz][:n][sorted_indz])
 
-            pprint("(sentences in my sack:)", sep="-", sp_bf=True, sp_aft=True)  
+            pprint("(sentences in my sack:)", sep="-", sp_bf=True, sp_aft=True)
             for i in range(n):
-                pprint(suitors["chars"][i])  
-                pprint(suitors["messages"][i])  
+                pprint(suitors["chars"][i])
+                pprint(suitors["messages"][i])
                 pprint(
                     f"(perplexity: {suitors['perplexities'][i].item()})"
-                )  
+                )
                 if args.batch_size > 1 and i != n - 1:
-                    pprint("*")  
+                    pprint("*")
 
             if RESETTING:
                 return reset_gen()
@@ -1014,8 +1014,8 @@ def generate_new():
         #     sp_aft=True,
         # )
         data = le_model.gen_avoiding(
-            prefix=TKNS,
-            avoiding=le_model.encode("<|e|>"),
+            prefix=[TKNS] * args.batch_size,
+            avoiding=le_model.encode("<|e|>")[0],
             length=10,
             temperature=args.temperature,
             top_k=args.top_k,
@@ -1038,12 +1038,12 @@ def generate_new():
     # for i in range(args.batch_size):
     #     pprint(
     #         f"{le_model.decode(data['tokens'][i][end_pref_orig:]).strip()}"
-    #     )  
+    #     )
     #     pprint(
     #         f"(perplexity: {data['perplexities'][i].item()})"
-    #     )  
+    #     )
     #     if args.batch_size > 1 and i != args.batch_size - 1:
-    #         pprint("*")  
+    #         pprint("*")
 
     if RESETTING:
         return reset_gen()
@@ -1178,8 +1178,8 @@ def generate():
     )["sequences"][0]
     generated = l[end_pref:]
 
-    pprint("(raw)", sep="-", sp_bf=True, sp_aft=True)  
-    pprint(generated)  
+    pprint("(raw)", sep="-", sp_bf=True, sp_aft=True)
+    pprint(generated)
 
     r = regex.search(REPLIQUE_RE, generated)
 
@@ -1194,24 +1194,24 @@ def generate():
         if args.character:
             char = args.character
 
-        pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)  
-        pprint(repl)  
+        pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
+        pprint(repl)
 
-        pprint("(char)", sep="-", sp_bf=True, sp_aft=True)  
-        pprint(char, sp_aft=True)  
-        pprint("(message)", sp_aft=True)  
-        pprint(message)  
+        pprint("(char)", sep="-", sp_bf=True, sp_aft=True)
+        pprint(char, sp_aft=True)
+        pprint("(message)", sp_aft=True)
+        pprint(message)
 
         prefix_repl = f"{PREFIX} \u001b[31m|\u001b[0m {r.group(0)}"
-        pprint(prefix_repl)  
+        pprint(prefix_repl)
 
         prefix_rank = le_model.get_rank(PREFIX)["ranks_mean"][0]
         prefix_repl_rank = le_model.get_rank(prefix_repl)["ranks_mean"][0]
         le_rank = le_model.get_rank(repl)["ranks_mean"][0]
 
-        pprint(f"(prefix rank: {prefix_rank})")  
-        pprint(f"(prefix & repl rank: {prefix_repl_rank})")  
-        pprint(f"(rank: {le_rank})")  
+        pprint(f"(prefix rank: {prefix_rank})")
+        pprint(f"(prefix & repl rank: {prefix_repl_rank})")
+        pprint(f"(rank: {le_rank})")
 
         if le_rank < args.rank_threshold:
             pprint("(sent)", sep="-", sp_bf=True, sp_aft=True)
@@ -1232,12 +1232,12 @@ def generate():
             pprint(
                 "(RANK INSUFFICIENT: NOT ANSWERING)",
                 sp_bf=True,
-                sp_aft=True,  
+                sp_aft=True,
             )
     else:
-        pprint("(picked:)", sep="-", sp_bf=True, sp_aft=True)  
-        pprint(l, sp_aft=True)  
-        pprint("(MARKERS NOT FOUND: NOT ANSWERING)")  
+        pprint("(picked:)", sep="-", sp_bf=True, sp_aft=True)
+        pprint(l, sp_aft=True)
+        pprint("(MARKERS NOT FOUND: NOT ANSWERING)")
 
     with LeLocle:
         IS_GENERATING = False
@@ -1305,11 +1305,11 @@ def on_chat_message(data):
     char = data["character"]
     msg = data["message"]
 
-    pprint("(received)", sep="-", sp_bf=True, sp_aft=True)  
+    pprint("(received)", sep="-", sp_bf=True, sp_aft=True)
     if data["character"]:
-        pprint(f"{char}")  
+        pprint(f"{char}")
     if data["message"]:
-        pprint(f"{msg}", sp_aft=True)  
+        pprint(f"{msg}", sp_aft=True)
 
     MESSAGES.append(data)
     character = data["character"]
@@ -1349,7 +1349,7 @@ def on_chat_message(data):
                     PREFIX = f"{SEPARATORS}"
         else:
             if TKNS.size == 0:
-                pprint("(RECEIVED NOTHING, KICKSTARTING)")  
+                pprint("(RECEIVED NOTHING, KICKSTARTING)")
                 with LeLocle:
                     TKNS = SEP_TKNS
 
@@ -1373,7 +1373,7 @@ def on_chat_message(data):
         else:
             pprint(
                 "(is generating, not answering...)", sep_aft="-", sp_aft=True
-            )  
+            )
     else:
         if not HAS_STARTED:
             with LeLocle:
@@ -1461,7 +1461,7 @@ def set_message_choice(data):
             msg = f"(received batch choice: '-1' received, {args.server_name} will choose)"
         else:
             msg = f"(received batch choice: message chosen: {BATCH_MSG_IND})"
-        pprint(msg, sep="-")  
+        pprint(msg, sep="-")
 
 
 @sio.on("server requests new batch")
@@ -1489,7 +1489,7 @@ def gen_request(data):
             else:
                 pprint(
                     "(is generating, not answering...)", sep_aft="-", sp_aft=True
-                )  
+                )
         else:
             if not HAS_STARTED:
                 with LeLocle:
