@@ -1363,10 +1363,12 @@ def on_chat_message(data):
             with LeLocle:
                 IS_GENERATING = True
             if args.mode == "legacy":
-                le_random_wall(generate)
+                if not le_random_wall(generate):
+                    return
                 sleepy_times()
             if args.mode == "reactive":
-                le_random_wall(generate_new)
+                if not le_random_wall(generate_new):
+                    return
                 sleepy_times()
         else:
             pprint(
