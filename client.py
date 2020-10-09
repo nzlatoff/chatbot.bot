@@ -975,14 +975,6 @@ def generate_new():
         {"character": "", "message": "",}
     )
 
-    # send_entrails(
-    #     {
-    #         "id": sio.sid,
-    #         "entrails": f"Tokens: {str(TKNS)}" if TKNS.size > 0 else "",
-    #         "user": args.server_name,
-    #     }
-    # )
-
     if RESETTING:
         return reset_gen()
 
@@ -1026,14 +1018,6 @@ def generate_new():
     except Exception as e:
         handle_error("gen_avoiding", end_pref_orig, e)
         return reset_gen()
-
-    # send_entrails(
-    #     {
-    #         "id": sio.sid,
-    #         "entrails": f"Tokens:\n{str(data['tokens'])}\nLogprobs:\n{str(data['logprobs'])}\nPerplexities:\n{str(data['perplexities'])}",
-    #         "user": args.server_name,
-    #     }
-    # )
 
     # for i in range(args.batch_size):
     #     pprint(
@@ -1091,7 +1075,6 @@ def generate_new():
 
     send_batch(
         {
-            "id": sio.sid,
             "chars": chars,
             "messages": messages,
             "perplexities": data["perplexities"].tolist(),
@@ -1507,7 +1490,7 @@ def send_typing(data):
 
 
 def send_entrails(data):
-    sio.emit("entrails", data)
+    sio.emit("entrails", {"id": sio.sid, "user": args.server_name, "entrails:": data,})
 
 
 def send_three_dots():
@@ -1521,7 +1504,9 @@ def send_ind():
 
 
 def send_batch(data):
-    sio.emit("chat batch", data)
+    sio.emit(
+        "chat batch", {"id": sio.sid, **data,}
+    )
 
 
 def send_message(data):
