@@ -2,16 +2,22 @@ from print_utils import print_underlined
 from print_utils import print_config
 from print_utils import pprint
 from base64 import b64encode
+from functools import partial
 from threading import Lock
 from gpt import Model
 import numpy as np
 import traceback
-import socketio
+import textwrap
 import argparse
+import socketio
+import blessed
 import random
 import regex
 import time
 import sys
+
+# numpy cosmetics
+np.set_printoptions(formatter={"all": lambda x: f"{str(x):>{5}}"})
 
 # for random_threshold arg below
 # https://stackoverflow.com/a/12117065
@@ -224,6 +230,8 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+# ----------------------------------------
+# socket & model init
 
 sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
@@ -292,7 +300,13 @@ def reset_gen():
         RESETTING = False
         TKNS = SEP_TKNS
         PREFIX = ""
-    pprint(f"thinking was stopped, wiping everything", sp_bf=True, sep="=", sp_aft=True, sep_aft="=")
+    pprint(
+        f"thinking was stopped, wiping everything",
+        sp_bf=True,
+        sep="=",
+        sp_aft=True,
+        sep_aft="=",
+    )
     return False
 
 
@@ -301,17 +315,18 @@ def index_from_master():
     global BATCH_MSG_IND
 
     i = 0
-    print()
+    pprint("")
     while BATCH_MSG_IND == None:
         if RESETTING:
             return False
-        print(
-            f"(waiting for batch choice for {args.wait_for_master - i} seconds)", end="     \r"
+        pprint(
+            f"(waiting for batch choice for {args.wait_for_master - i + 1} seconds)     ",
+            cr=True,
         )
         time.sleep(1)
         i += 1
         if i > args.wait_for_master + 2:
-            print(f"waited enough, {args.server_name} taking back control!")
+            pprint(f"waited enough, {args.server_name} taking back control!")
             with LeLocle:
                 BATCH_MSG_IND = -1
     return True
@@ -332,6 +347,11 @@ def trim_tok(tkns):
 
 
 def fancy_tok_typing(tkns):
+    """
+    Somewhat nasty piece of work, playing with the Python print function
+    (without carriage return, overwriting the current line, as well as sending
+    things to the web at the same time).
+    """
     pprint(
         f"(alright, {args.server_name} sending les tokens to humans...)",
         sep="-",
@@ -339,33 +359,52 @@ def fancy_tok_typing(tkns):
         sp_aft=True,
     )
     tkns = trim_tok(tkns)
-    total = len(tkns) + 1
+    total = len(tkns)
     nl_ind = np.where(tkns == 201)[0]
-    if nl_ind.size == 0:
+    if nl_ind.size == 0:  # no newline separating char from msg
         nl_ind = 1
+        send_entrails("[ ", pre=True)
     else:
         nl_ind = nl_ind[0]
+        s = f"{tkns[:nl_ind + 1]}"
+        if "\n" in s:  # if char on more than one line
+            s = s.split("\n")  # split and send all
+            [print(f"{ss}") for ss in s[:-1]]
+            [send_entrails(f"{ss}", pre=True) for ss in s[:-1]]  # but the last one
+            s = s[-1]
+        print(f"{s[:s.rfind(']')]}\r", end="")
+        send_entrails(f"{s[:s.rfind(']')]} ", pre=True)
+        # breakpoint()
     prev = ""
+    # i starts from after the char onward
     for i in range(nl_ind, total):
+        # breakpoint()
         if RESETTING:
             return False
-        if nl_ind == 1:
+        if nl_ind == 1:  # if not, no char
             char = ""
             message = le_model.decode(tkns[:i])
-        else:
+        else:  # else, we split at that newline
             char = le_model.decode(tkns[:nl_ind])
             message = le_model.decode(tkns[nl_ind + 1 : i + 2])
+        # np arrays are formatted, split at the new line, and only print the
+        # last line (overwriting at each step unless we have reached a new line
         msg = f"{tkns[:i+2]}".split("\n")
-        current = msg[-1] + "\r"
+        current = msg[-1][: msg[-1].rfind("]")] + "\r"
         if len(current) < len(prev):
             print()
-        print(msg[-1] + "\r", end="")
+            send_entrails(" ", pre=True)
+        print(current, end="")
+        t = tkns[i + 1 : i + 2]
+        if t.size > 0:
+            send_entrails(f"{t.item():>5} ", no_cr=True)
         prev = current
         send_typing(
             {"character": char, "message": message,}
         )
         time.sleep(args.print_speed)
-    print()
+    print(msg[-1])
+    send_entrails("]", no_cr=True)
     print()
     return True
 
@@ -494,8 +533,7 @@ def select_in_batch(data, chars, messages):
         char = chars[BATCH_MSG_IND]
         message = messages[BATCH_MSG_IND]
         pprint(
-            f"(ok, sending, message: {BATCH_MSG_IND+1})",
-            sp_aft=True,
+            f"(ok, sending, message: {BATCH_MSG_IND+1})", sp_aft=True,
         )
         pprint(char.strip())
         pprint(message)
@@ -522,10 +560,14 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
     send_three_dots()
 
     pprint(f"O.O.O.P.S. What ocurred during {fn_name}?", sep="=", sp_bf=True)
-    exc_type, exc_value, exc_traceback = sys.exc_info()
-    traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
+    # exc_type, exc_value, exc_traceback = sys.exc_info()
+    # traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
+    # https://docs.python.org/3/library/traceback.html#traceback.format_exception
+    [pprint(p, pre=True) for p in traceback.format_exc().split("\n") if p]
     if type(e).__name__ == "ResourceExhaustedError":
-        pprint(f"\033[31m! DANGEROUS LENGTH REACHED !\033[0m Trimming by a factor of {trimming_factor} (approximately).",)
+        pprint(
+            f"DANGEROUS LENGTH REACHED ! Trimming by a factor of {trimming_factor} (approximately).",
+        )
 
         two_thirds = int(end_pref_orig * trimming_factor)
 
@@ -542,6 +584,8 @@ def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
             sep_aft="=",
         )
         time.sleep(sleep_for)
+    else:
+        pprint("", sp_aft=True, sep_aft="=")
 
 
 def trim_tokens(tkns, end_pref, end_pref_after_injections):
@@ -561,6 +605,7 @@ def trim_tokens(tkns, end_pref, end_pref_after_injections):
         generated = [seq.strip() for seq in le_model.decode(trimmed)]
     return generated, trimmed
 
+
 # https://stackoverflow.com/a/61421479
 def unequal_lists_of_lists_to_np(a, b):
     if isinstance(a, list):
@@ -577,6 +622,7 @@ def unequal_lists_of_lists_to_np(a, b):
     container[:l_a] = a
     container[l_a:] = b
     return container
+
 
 def extract_chars_msgs(generated, data):
 
@@ -627,14 +673,11 @@ def try_catch_wrapper(fn):
             return False
     except Exception as e:
         pprint(
-            f"0.0.0.P.S. in function {fn.__name__}:",
-            sp_bf=True,
-            sep="=",
-            sp_aft=True,
+            f"0.0.0.P.S. in function {fn.__name__}:", sp_bf=True, sep="=", sp_aft=True,
         )
         exc_type, exc_value, exc_traceback = sys.exc_info()
         traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
-        print(exc_type, exc_type == 'ValueError')
+        print(exc_type, exc_type == "ValueError")
         pprint("(thinking is being stopped)", sp_bf=True, sp_aft=True, sep_aft="=")
         with LeLocle:
             BATCH_MSG_IND = None
@@ -648,15 +691,11 @@ def le_random_wall(fn):
     rand = random.random()
     pprint(f"(random has spoken: {rand})", sp_bf=True)
     if rand > args.random_threshold:
-        pprint(
-            "(le grreat rrrandom is bountiful, let's think)",
-        )
+        pprint("(le grreat rrrandom is bountiful, let's think)",)
         if not try_catch_wrapper(fn):
             return False
     else:
-        pprint(
-            "(nope, the wall of random could not be passed)", sp_aft=True
-        )
+        pprint("(nope, the wall of random could not be passed)", sp_aft=True)
         with LeLocle:
             IS_GENERATING = False
     return True
@@ -788,10 +827,7 @@ def generate_mass():
         # then produce the rest, until the end token
         try:
             pprint(
-                "(think, pig!)",
-                sep="-",
-                sp_bf=True,
-                sp_aft=True,
+                "(think, pig!)", sep="-", sp_bf=True, sp_aft=True,
             )
             data = le_model.gen_until(
                 prefix=data["tokens"],
@@ -803,6 +839,7 @@ def generate_mass():
                 top_p=args.top_p,
                 top_k=args.top_k,
                 batch_size=args.batch_size,
+                pprint=pprint,
             )
 
         except Exception as e:
@@ -849,7 +886,9 @@ def generate_mass():
             former_suitors = set([t.tostring() for t in suitors["tokens"]])
 
             # use same partition to extract the sequences
-            concat_seqs = unequal_lists_of_lists_to_np(suitors["tokens"], data["tokens"])
+            concat_seqs = unequal_lists_of_lists_to_np(
+                suitors["tokens"], data["tokens"]
+            )
             suitors["tokens"] = list(concat_seqs[n_best_indz][:n][sorted_indz])
 
             generated, data["trimmed"] = trim_tokens(
@@ -868,7 +907,7 @@ def generate_mass():
 
             if former_suitors == set([t.tostring() for t in suitors["tokens"]]):
                 pprint(
-                    f"(\033[31mNO UPDATE.\033[0m could not do better than past sentences.  {args.patience - patience - 1} more tries.)",
+                    f"(NO UPDATE. could not do better than past sentences.  {args.patience - patience - 1} more tries.)",
                     sp_bf=True,
                 )
                 patience += 1
@@ -877,18 +916,20 @@ def generate_mass():
 
             concat_chars = unequal_lists_of_lists_to_np(suitors["chars"], chars)
             suitors["chars"] = list(concat_chars[n_best_indz][:n][sorted_indz])
-            concat_messages = unequal_lists_of_lists_to_np(suitors["messages"], messages)
+            concat_messages = unequal_lists_of_lists_to_np(
+                suitors["messages"], messages
+            )
             suitors["messages"] = list(concat_messages[n_best_indz][:n][sorted_indz])
-            concat_trimmed = unequal_lists_of_lists_to_np(suitors["trimmed"], data["trimmed"])
+            concat_trimmed = unequal_lists_of_lists_to_np(
+                suitors["trimmed"], data["trimmed"]
+            )
             suitors["trimmed"] = list(concat_trimmed[n_best_indz][:n][sorted_indz])
 
             pprint("(sentences in my sack:)", sep="-", sp_bf=True, sp_aft=True)
             for i in range(n):
                 pprint(suitors["chars"][i])
                 pprint(suitors["messages"][i])
-                pprint(
-                    f"(perplexity: {suitors['perplexities'][i].item()})"
-                )
+                pprint(f"(perplexity: {suitors['perplexities'][i].item()})")
                 if args.batch_size > 1 and i != n - 1:
                     pprint("*")
 
@@ -982,9 +1023,7 @@ def generate_new():
 
     if TKNS_LEN_THRESHOLD and TKNS.size >= TKNS_LEN_THRESHOLD:
         pprint(
-            "(REACHED THRESHOLD LENGTH, TRIMMING)",
-            sp_bf=True,
-            sp_aft=True,
+            "(REACHED THRESHOLD LENGTH, TRIMMING)", sp_bf=True, sp_aft=True,
         )
         with LeLocle:
             TKNS = TKNS[-TKNS_LEN_THRESHOLD:]
@@ -1015,6 +1054,7 @@ def generate_new():
             batch_size=args.batch_size,
         )
 
+        x = 1/0
     except Exception as e:
         handle_error("gen_avoiding", end_pref_orig, e)
         return reset_gen()
@@ -1035,10 +1075,7 @@ def generate_new():
     # then produce the rest, until the end token
     try:
         pprint(
-            "(think, pig!)",
-            sep="-",
-            sp_bf=True,
-            sp_aft=True,
+            "(think, pig!)", sep="-", sp_bf=True, sp_aft=True,
         )
         data = le_model.gen_until(
             prefix=data["tokens"],
@@ -1050,6 +1087,7 @@ def generate_new():
             top_p=args.top_p,
             top_k=args.top_k,
             batch_size=args.batch_size,
+            pprint=pprint,
         )
 
     except Exception as e:
@@ -1213,9 +1251,7 @@ def generate():
                 PREFIX = f"{PREFIX}{START}{char}\n{message}"
         else:
             pprint(
-                "(RANK INSUFFICIENT: NOT ANSWERING)",
-                sp_bf=True,
-                sp_aft=True,
+                "(RANK INSUFFICIENT: NOT ANSWERING)", sp_bf=True, sp_aft=True,
             )
     else:
         pprint("(picked:)", sep="-", sp_bf=True, sp_aft=True)
@@ -1228,9 +1264,9 @@ def generate():
 
 @sio.event
 def connect():
-    print(f"{args.server_name} established connection")
-    print("-" * 40)
     sio.emit("new bot", args.server_name)
+    # pprint(f"connecting to: {sio.connection_url}", sep="=")
+    pprint(f"{args.server_name} established connection", sep="=", sep_aft="=")
     # if args.mode == "autonomous":
     #     auto_loop(generate_new)
     # elif args.mode == "optimizer":
@@ -1272,7 +1308,13 @@ def reset_session():
             HAS_STARTED = False
             TKNS = SEP_TKNS
             PREFIX = ""
-        pprint("not thinking right now, wiping everything", sp_bf=True, sep="=", sp_aft=True, sep_aft="=")
+        pprint(
+            "not thinking right now, wiping everything",
+            sp_bf=True,
+            sep="=",
+            sp_aft=True,
+            sep_aft="=",
+        )
 
 
 @sio.on("received")
@@ -1354,9 +1396,7 @@ def on_chat_message(data):
                     return
                 sleepy_times()
         else:
-            pprint(
-                "(is generating, not answering...)", sep_aft="-", sp_aft=True
-            )
+            pprint("(is generating, not answering...)", sep_aft="-", sp_aft=True)
     else:
         if not HAS_STARTED:
             with LeLocle:
@@ -1418,11 +1458,12 @@ def set_config(data):
                     v = v if v > 0 else 0.0001
                 else:
                     v = type(args.__getattribute__(k))(v)
-                print(f"{k.replace('_', ' '):>{longest}}: {v}")
+                pprint(f"{k.replace('_', ' '):>{longest}}: {v}", pre=True)
                 args.__setattr__(k, v)
             except:
-                print(
-                    f"{k.replace('_', ' '):>{longest}}:\033[31m !! cannot cast '{v}' to {type(args.__getattribute__(k)).__name__}, ignoring...\033[0m"
+                pprint(
+                    f"{k.replace('_', ' '):>{longest}}: !! cannot cast '{v}' to {type(args.__getattribute__(k)).__name__}, ignoring...",
+                    pre=True,
                 )
                 continue
         pprint("", sep="-")
@@ -1438,12 +1479,12 @@ def set_message_choice(data):
             BATCH_MSG_IND = data["choice"]
         if BATCH_MSG_IND == -2:
             msg = (
-                f"(received batch choice: '-2' received, the master skipped this batch)"
+                f"(received choice: '-2', not sending)"
             )
         if BATCH_MSG_IND == -1:
-            msg = f"(received batch choice: '-1' received, {args.server_name} will choose)"
+            msg = f"(received choice: '-1', {args.server_name} chooses)"
         else:
-            msg = f"(received batch choice: message chosen: {BATCH_MSG_IND})"
+            msg = f"(received choice: {BATCH_MSG_IND})"
         pprint(msg, sep="-")
 
 
@@ -1470,9 +1511,7 @@ def gen_request(data):
                     try_catch_wrapper(generate_new)
                     sleepy_times()
             else:
-                pprint(
-                    "(is generating, not answering...)", sep_aft="-", sp_aft=True
-                )
+                pprint("(is generating, not answering...)", sep_aft="-", sp_aft=True)
         else:
             if not HAS_STARTED:
                 with LeLocle:
@@ -1489,8 +1528,16 @@ def send_typing(data):
     )
 
 
-def send_entrails(data):
-    sio.emit("entrails", {"id": sio.sid, "user": args.server_name, "entrails:": data,})
+def send_entrails(data, **kwargs):
+    sio.emit(
+        "entrails",
+        {
+            "id": sio.sid,
+            "user": args.server_name,
+            "entrails": data,
+            **kwargs,
+        },
+    )
 
 
 def send_three_dots():
@@ -1504,9 +1551,7 @@ def send_ind():
 
 
 def send_batch(data):
-    sio.emit(
-        "chat batch", {"id": sio.sid, **data,}
-    )
+    sio.emit("chat batch", {"id": sio.sid, **data,})
 
 
 def send_message(data):
@@ -1517,22 +1562,22 @@ def send_direct_message(data):
     sio.emit("direct chat message", data)
 
 
+# ----------------------------------------
+# specifying print after send_entrails
+
+pprint = partial(pprint, fn=send_entrails)
+
+
 user_pass = b64encode(b"username:password").decode("ascii")
 if args.local:
     url = "http://localhost:5100"
-    print("-" * 40)
-    print(f"connecting to: {url}")
     sio.connect(url)
 else:
     if args.heroku:
         url = "***HEROKU WEB ADDRESS***"
-        print("-" * 40)
-        print(f"connecting to: {url}")
         sio.connect(url)
     else:
         user_pass = b64encode(b"username:password").decode("ascii")
         url = "https://spark.theatrophone.fr"
-        print("-" * 40)
-        print(f"connecting to: {url}")
         sio.connect(url, {"Authorization": "Basic %s" % user_pass})
 sio.wait()
