@@ -224,6 +224,7 @@ class Model:
         top_k=0,
         top_p=0.0,
         batch_size=None,
+        pprint=None,
     ):
 
         """ # {{{
@@ -309,8 +310,9 @@ class Model:
                 chunk_length=chunk_length,
                 exclude_until=exclude_until,
             )
-            msg = f"{tkns[:, -chunk_length:]}".replace("\n", "")[: term.width]
-            print(msg)
+            if pprint:
+                msg = f"{tkns[:, -chunk_length:]}".replace("\n", "")
+                pprint(msg, term_trim=term.width, pre=True)
             context_tkns = tkns
             i += 1
         if i < sanity_limit:
