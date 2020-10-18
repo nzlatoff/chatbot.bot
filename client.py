@@ -1054,7 +1054,6 @@ def generate_new():
             batch_size=args.batch_size,
         )
 
-        x = 1/0
     except Exception as e:
         handle_error("gen_avoiding", end_pref_orig, e)
         return reset_gen()
