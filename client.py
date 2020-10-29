@@ -334,12 +334,14 @@ def index_from_master():
 
 
 def trim_tok(tkns):
+    print("TRIMMING TOKS", tkns)
     riddance = {
         le_model.encode(i)[0]
         for i in {" ", "\n", " ", "<|s|>", "<|e|>", "<|endoftext|>"}
     }
     # left trimming
     while tkns[0] in riddance:
+        print("TOKS", tkns[0], tkns)
         tkns = tkns[1:]
     # right trimming
     while tkns[-1] in riddance:
