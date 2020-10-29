@@ -914,8 +914,8 @@ class Model:
         self.ckpt = tf.train.latest_checkpoint(path)
         self.saver = tf.compat.v1.train.Saver(allow_empty=True)
         self.sess.run(tf.compat.v1.global_variables_initializer())
-        print("-" * 40)
         print(f"loading checkpoint {self.ckpt}")
+        print("-" * 40)
         self.saver.restore(self.sess, self.ckpt)
 
     def _check_hparams(self, hparams_file):
