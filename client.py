@@ -3,6 +3,7 @@ from print_utils import print_config
 from print_utils import pprint
 from base64 import b64encode
 from functools import partial
+from print_utils import term
 from threading import Lock
 from gpt import Model
 import numpy as np
@@ -829,7 +830,7 @@ def generate_mass():
             pprint(
                 "(think, pig!)", sep="-", sp_bf=True, sp_aft=True,
             )
-            data = le_model.gen_until(
+            data_until = le_model.gen_until(
                 prefix=data["tokens"],
                 until="<|s|>",
                 exclude_until=False,
@@ -841,6 +842,14 @@ def generate_mass():
                 batch_size=args.batch_size,
                 pprint=pprint,
             )
+            # generator logic to extract intermediate results
+            while True:
+                result = next(data_gen)
+                if isinstance(result, str):
+                    pprint(result, term_trim=term.width, pre=True)
+                else:
+                    data = result
+                    break
 
         except Exception as e:
             handle_error("gen_until", end_pref_orig, e)
@@ -1054,6 +1063,7 @@ def generate_new():
                 top_k=args.top_k,
                 top_p=args.top_p,
                 batch_size=args.batch_size,
+                pprint=True,
             )
 
         except Exception as e:
@@ -1078,7 +1088,7 @@ def generate_new():
         pprint(
             "(think, pig!)", sep="-", sp_bf=True, sp_aft=True,
         )
-        data = le_model.gen_until(
+        data_gen = le_model.gen_until(
             prefix=data["tokens"] if args.inject_after_char else [TKNS] * args.batch_size,
             until="<|s|>",
             exclude_until=False,
@@ -1088,8 +1098,16 @@ def generate_new():
             top_p=args.top_p,
             top_k=args.top_k,
             batch_size=args.batch_size,
-            pprint=pprint,
+            pprint=True,
         )
+        # generator logic to extract intermediate results
+        while True:
+            result = next(data_gen)
+            if isinstance(result, str):
+                pprint(result, term_trim=term.width, pre=True)
+            else:
+                data = result
+                break
 
     except Exception as e:
         handle_error("gen_until", end_pref_orig, e)
