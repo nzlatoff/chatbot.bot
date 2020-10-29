@@ -312,7 +312,8 @@ class Model:
             )
             if pprint:
                 msg = f"{tkns[:, -chunk_length:]}".replace("\n", "")
-                pprint(msg, term_trim=term.width, pre=True)
+                yield msg
+                # pprint(msg, term_trim=term.width, pre=True)
             context_tkns = tkns
             i += 1
         if i < sanity_limit:
@@ -335,7 +336,7 @@ class Model:
             #     {k: v for k, v in perps.items() if k is not "perplexities"}
             # )
             # logprobs.append(lgpr)
-        return {
+        yield {
             "tokens": tkns,
             "perplexities": np.array(perplexities),
             # "sequences": self.decode(tkns),
