@@ -1047,43 +1047,40 @@ def generate_new():
     if RESETTING:
         return reset_gen()
 
-    if args.inject_after_char:
+    # first produce a small bit avoiding the end token
+    try:
+        # pprint(
+        #     "(about to think, warming up, making sure it doesn't finish early)",
+        #     sep="-",
+        #     sp_bf=True,
+        #     sp_aft=True,
+        # )
+        data = le_model.gen_avoiding(
+            prefix=[TKNS] * args.batch_size,
+            avoiding=le_model.encode("<|e|>")[0],
+            length=10,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            top_p=args.top_p,
+            batch_size=args.batch_size,
+        )
 
-        # first produce a small bit avoiding the end token
-        try:
-            # pprint(
-            #     "(about to think, warming up, making sure it doesn't finish early)",
-            #     sep="-",
-            #     sp_bf=True,
-            #     sp_aft=True,
-            # )
-            data = le_model.gen_avoiding(
-                prefix=[TKNS] * args.batch_size,
-                avoiding=le_model.encode("<|e|>")[0],
-                length=10,
-                temperature=args.temperature,
-                top_k=args.top_k,
-                top_p=args.top_p,
-                batch_size=args.batch_size,
-                pprint=True,
-            )
+    except Exception as e:
+        handle_error("gen_avoiding", end_pref_orig, e)
+        return reset_gen()
 
-        except Exception as e:
-            handle_error("gen_avoiding", end_pref_orig, e)
-            return reset_gen()
+    # for i in range(args.batch_size):
+    #     pprint(
+    #         f"{le_model.decode(data['tokens'][i][end_pref_orig:]).strip()}"
+    #     )
+    #     pprint(
+    #         f"(perplexity: {data['perplexities'][i].item()})"
+    #     )
+    #     if args.batch_size > 1 and i != args.batch_size - 1:
+    #         pprint("*")
 
-        # for i in range(args.batch_size):
-        #     pprint(
-        #         f"{le_model.decode(data['tokens'][i][end_pref_orig:]).strip()}"
-        #     )
-        #     pprint(
-        #         f"(perplexity: {data['perplexities'][i].item()})"
-        #     )
-        #     if args.batch_size > 1 and i != args.batch_size - 1:
-        #         pprint("*")
-
-        if RESETTING:
-            return reset_gen()
+    if RESETTING:
+        return reset_gen()
 
     # then produce the rest, until the end token
     try:
@@ -1091,7 +1088,7 @@ def generate_new():
             "(think, pig!)", sep="-", sp_bf=True, sp_aft=True,
         )
         data_gen = le_model.gen_until(
-            prefix=data["tokens"] if args.inject_after_char else [TKNS] * args.batch_size,
+            prefix=data["tokens"],
             until="<|s|>",
             exclude_until=False,
             sanity_limit=100,
