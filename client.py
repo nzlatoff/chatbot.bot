@@ -13,6 +13,7 @@ import argparse
 import socketio
 import blessed
 import random
+import string
 import regex
 import time
 import sys
@@ -270,6 +271,8 @@ BATCH_MSG_IND = None
 TKNS_LEN_THRESHOLD = args.limit_prefix
 
 HAS_STARTED = False  # for autonomous modes
+
+BOT_ID = f"bot-{''.join([random.choice(string.ascii_letters + string.digits) for _ in range(23)])}"
 
 # ----------------------------------------
 # for printing see print_utils.py
@@ -950,7 +953,7 @@ def generate_mass():
             if patience < args.patience:
                 send_batch(
                     {
-                        "id": sio.sid,
+                        "id": BOT_ID,
                         "chars": suitors["chars"],
                         "messages": suitors["messages"],
                         "perplexities": suitors["perplexities"].tolist(),
@@ -961,7 +964,7 @@ def generate_mass():
 
     send_batch(
         {
-            "id": sio.sid,
+            "id": BOT_ID,
             "chars": suitors["chars"],
             "messages": suitors["messages"],
             "perplexities": suitors["perplexities"].tolist(),
@@ -1160,7 +1163,7 @@ def generate_new():
     send_ind()
 
     send_direct_message(
-        {"character": char, "message": message, "user": args.server_name, "id": sio.sid}
+        {"character": char, "message": message, "user": args.server_name, "id": BOT_ID}
     )
 
     if not fancy_tok_typing(data["trimmed"][BATCH_MSG_IND]):
@@ -1282,7 +1285,7 @@ def generate():
 
 @sio.event
 def connect():
-    sio.emit("new bot", args.server_name)
+    sio.emit("new bot", {"user": args.server_name, "id": BOT_ID})
     # pprint(f"connecting to: {sio.connection_url}", sep="=")
     pprint(f"{args.server_name} established connection", sep="=", sep_aft="=")
     # if args.mode == "autonomous":
@@ -1428,7 +1431,7 @@ def on_chat_message(data):
 @sio.on("get bot config")
 def send_config():
     config = {
-        "id": sio.sid,
+        "id": BOT_ID,
         "user": args.server_name,
         "model": args.model,
         "run": args.run_name,
@@ -1464,7 +1467,7 @@ def send_config():
 
 @sio.on("server sets bot config")
 def set_config(data):
-    if data["id"] == sio.sid:
+    if data["id"] == BOT_ID:
         pprint("received config:", sep="-", sp_bf=True, und=True)
         longest = len(max(list(data.keys()), key=lambda x: len(x)))
         for k, v in data.items():
@@ -1492,13 +1495,11 @@ def set_message_choice(data):
 
     global BATCH_MSG_IND
 
-    if data["id"] == sio.sid:
+    if data["id"] == BOT_ID:
         with LeLocle:
             BATCH_MSG_IND = data["choice"]
         if BATCH_MSG_IND == -2:
-            msg = (
-                f"(received choice: '-2', not sending)"
-            )
+            msg = f"(received choice: '-2', not sending)"
         if BATCH_MSG_IND == -1:
             msg = f"(received choice: '-1', {args.server_name} chooses)"
         else:
@@ -1513,7 +1514,7 @@ def gen_request(data):
     global HAS_STARTED
     global TKNS
 
-    if data["id"] == sio.sid:
+    if data["id"] == BOT_ID:
         if TKNS.size == 0:
             with LeLocle:
                 TKNS = SEP_TKNS
@@ -1542,19 +1543,14 @@ def gen_request(data):
 
 def send_typing(data):
     sio.emit(
-        "typing", {"id": sio.sid, "user": args.server_name, "scroll": True, **data,}
+        "typing", {"id": BOT_ID, "user": args.server_name, "scroll": True, **data,}
     )
 
 
 def send_entrails(data, **kwargs):
     sio.emit(
         "entrails",
-        {
-            "id": sio.sid,
-            "user": args.server_name,
-            "entrails": data,
-            **kwargs,
-        },
+        {"id": BOT_ID, "user": args.server_name, "entrails": data, **kwargs,},
     )
 
 
@@ -1565,11 +1561,11 @@ def send_three_dots():
 
 
 def send_ind():
-    sio.emit("bot confirms choice", {"id": sio.sid, "choice": BATCH_MSG_IND,})
+    sio.emit("bot confirms choice", {"id": BOT_ID, "choice": BATCH_MSG_IND,})
 
 
 def send_batch(data):
-    sio.emit("chat batch", {"id": sio.sid, **data,})
+    sio.emit("chat batch", {"id": BOT_ID, **data,})
 
 
 def send_message(data):
