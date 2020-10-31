@@ -78,6 +78,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--device",
+    type=str,
+    default="/GPU:0",
+    help="The GPU on which the net will be run. Default: /GPU:0.",
+)
+
+parser.add_argument(
     "--batch_size",
     type=int,
     default=1,
@@ -242,6 +249,7 @@ LeLocle = Lock()
 le_model = Model(
     model_name=args.model,
     run_name=args.run_name,
+    device=args.device,
     batch_size=args.batch_size,
     special_tokens=["<|endoftext|>"]
     if (args.mode == "legacy")
