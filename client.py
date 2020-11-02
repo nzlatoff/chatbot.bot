@@ -844,7 +844,7 @@ def generate_mass():
         # then produce the rest, until the end token
         try:
             pprint(
-                "(think, pig!)", sep="-", sp_bf=True, sp_aft=True,
+                f"(Danger! {args.server_name} is about to think!)", sep="-", sp_bf=True, sp_aft=True,
             )
             data_until = le_model.gen_until(
                 prefix=data["tokens"],
@@ -1099,7 +1099,7 @@ def generate_new():
     # then produce the rest, until the end token
     try:
         pprint(
-            "(think, pig!)", sep="-", sp_bf=True, sp_aft=True,
+            "(Danger! {args.server_name} is about to think!)", sep="-", sp_bf=True, sp_aft=True,
         )
         data_gen = le_model.gen_until(
             prefix=data["tokens"],
