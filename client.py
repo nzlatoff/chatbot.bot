@@ -172,7 +172,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--hidden_before_char",
+    "--subtext",
     type=str,
     default="",
     help="""Additional text inserted at the end of each received message, before
@@ -182,13 +182,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--inject_after_char",
+    "--first_words",
     type=str,
     default="",
     help="""Additional text inserted at the start of each produced message,
     after the character (influences the current answer). If the character is
     not artificially set as well, this start of line becomes the same as the
-    hidden_before_char: the text is added at the end of the received messages,
+    subtext: the text is added at the end of the received messages,
     and the network is free to produce any answer (coloured, however, by the
     context). Defaults to nothing.""",
 )
@@ -469,20 +469,20 @@ def preprocess_prefix():
     if not args.character:
 
         # if no char injected, inject before markers:
-        # - add hidden_before_char
-        # - add inject_after_char
+        # - add subtext
+        # - add first_words
         # - markers
 
-        if args.hidden_before_char:
-            args.hidden_before_ch = args.hidden_before_char.strip()
-            hidden_before_encoded = le_model.encode(f"\n{args.hidden_before_char}")
+        if args.subtext:
+            args.hidden_before_ch = args.subtext.strip()
+            hidden_before_encoded = le_model.encode(f"\n{args.subtext}")
             len_injections += len(hidden_before_encoded)
             with LeLocle:
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
 
-        if args.inject_after_char:
-            args.inject_after_char = args.inject_after_char.strip()
-            inject_after_encoded = le_model.encode(f"\n{args.inject_after_char}")
+        if args.first_words:
+            args.first_words = args.first_words.strip()
+            inject_after_encoded = le_model.encode(f"\n{args.first_words}")
             len_injections += len(inject_after_encoded)
             with LeLocle:
                 TKNS = np.concatenate((TKNS, inject_after_encoded))
@@ -502,9 +502,9 @@ def preprocess_prefix():
         with LeLocle:
             TKNS = np.concatenate((TKNS, SEP_TKNS))
 
-        if args.hidden_before_char:
-            args.hidden_before_ch = args.hidden_before_char.strip()
-            hidden_before_encoded = le_model.encode(f"{args.hidden_before_char}\n")
+        if args.subtext:
+            args.hidden_before_ch = args.subtext.strip()
+            hidden_before_encoded = le_model.encode(f"{args.subtext}\n")
             len_injections += len(hidden_before_encoded)
             with LeLocle:
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
@@ -516,9 +516,9 @@ def preprocess_prefix():
         with LeLocle:
             TKNS = np.concatenate((TKNS, char_encoded))
         end_pref_after_injections = end_pref + len(char_encoded)
-        if args.inject_after_char:
-            args.inject_after_char = args.inject_after_char.strip()
-            after_char_encoded = le_model.encode(f"{args.inject_after_char}")
+        if args.first_words:
+            args.first_words = args.first_words.strip()
+            after_char_encoded = le_model.encode(f"{args.first_words}")
             with LeLocle:
                 TKNS = np.concatenate((TKNS, after_char_encoded))
             # end_pref_after_injections += len(after_char_encoded)
@@ -1462,8 +1462,8 @@ def send_config():
         config.update(
             {
                 "character": args.character,
-                "hidden_before_char": args.hidden_before_char,
-                "inject_after_char": args.inject_after_char,
+                "subtext": args.subtext,
+                "first_words": args.first_words,
                 "wait_for_master": args.wait_for_master,
                 "sleepy_time": args.sleepy_time,
             }
