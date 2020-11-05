@@ -21,7 +21,7 @@ import sys
 # numpy cosmetics
 np.set_printoptions(formatter={"all": lambda x: f"{str(x):>{5}}"})
 
-# for random_threshold arg below
+# for threshold arg below
 # https://stackoverflow.com/a/12117065
 def float_range(x):
     try:
@@ -115,7 +115,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--print_speed",
+    "--tempo",
     type=float,
     default=0.1,
     help="Length of pause for each step of interactive print loop, in ms.",
@@ -139,7 +139,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--random_threshold",
+    "--threshold",
     type=float_range,
     default=0.0,
     help="""A random number between 0 and 1 is generated each time the network
@@ -149,12 +149,12 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--sleepy_time",
+    "--pause",
     type=positive_float,
     default=10,
     help="""The most time the bot sleeps between each new attempt to produce
     text (for autonomous & optimizer modes. A random number is generated,
-    between 1 and sleepy_time, before each call of the generate function.""",
+    between 1 and pause, before each call of the generate function.""",
 )
 
 parser.add_argument(
@@ -194,7 +194,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--wait_for_master",
+    "--wait",
     type=int,
     default=0,
     help="""Waiting time before activating the default message choice. When
@@ -332,12 +332,12 @@ def index_from_master():
         if RESETTING:
             return False
         pprint(
-            f"(waiting for batch choice for {args.wait_for_master - i + 1} seconds)     ",
+            f"(waiting for batch choice for {args.wait - i + 1} seconds)     ",
             cr=True,
         )
         time.sleep(1)
         i += 1
-        if i > args.wait_for_master + 2:
+        if i > args.wait + 2:
             pprint(f"waited enough, {args.server_name} taking back control!")
             with LeLocle:
                 BATCH_MSG_IND = -1
@@ -345,8 +345,8 @@ def index_from_master():
 
 
 def trim_tok(tkns):
-    print("TRIMMING TOKS:\n", tkns)
-    print()
+    # print("TRIMMING TOKS:\n", tkns)
+    # print()
     riddance = {
         le_model.encode(i)[0]
         for i in {" ", "\n", " ", "<|s|>", "<|e|>", "<|endoftext|>"}
@@ -418,7 +418,7 @@ def fancy_tok_typing(tkns):
         send_typing(
             {"character": char, "message": message,}
         )
-        time.sleep(args.print_speed)
+        time.sleep(args.tempo)
     print(msg[-1])
     send_entrails("]", no_cr=True)
     print()
@@ -439,7 +439,7 @@ def fancy_typing(char, message):
         send_typing(
             {"character": char, "message": message[:i],}
         )
-        time.sleep(args.print_speed)
+        time.sleep(args.tempo)
     print()
     print()
     return True
@@ -706,7 +706,7 @@ def le_random_wall(fn):
     global IS_GENERATING
     rand = random.random()
     pprint(f"(random has spoken: {rand})", sp_bf=True)
-    if rand > args.random_threshold:
+    if rand > args.threshold:
         pprint("(le grreat rrrandom is bountiful, let's think)",)
         if not try_catch_wrapper(fn):
             return False
@@ -730,11 +730,11 @@ def le_warning(has_warned):
 
 
 def sleepy_times():
-    r = np.random.uniform(1, 1 + args.sleepy_time)
+    r = np.random.uniform(1, 1 + args.pause)
     pprint(
         f"(sleepy timezz for {args.server_name}: {r} seconds.)", sep="-", sp_bf=True,
     )
-    pprint(f"(the max could have been:  {1 + args.sleepy_time})")
+    pprint(f"(the max could have been:  {1 + args.pause})")
     time.sleep(r)
 
 
@@ -796,6 +796,7 @@ def generate_mass():
     if RESETTING:
         return reset_gen()
 
+    tkns_bckp = TKNS # bckp in case batch skipped
     end_pref_orig, end_pref, end_pref_after_injections = preprocess_prefix()
 
     if RESETTING:
@@ -978,7 +979,7 @@ def generate_mass():
             "chars": suitors["chars"],
             "messages": suitors["messages"],
             "perplexities": suitors["perplexities"].tolist(),
-            "seconds": args.wait_for_master,
+            "seconds": args.wait,
             "countdown": True,
         }
     )
@@ -989,8 +990,10 @@ def generate_mass():
     # batch skipped by master
     if BATCH_MSG_IND == -2:
         with LeLocle:
+            TKNS = tkns_bckp
             BATCH_MSG_IND = None
             IS_GENERATING = False
+        send_three_dots()
         return True
 
     if RESETTING:
@@ -1055,6 +1058,7 @@ def generate_new():
     if RESETTING:
         return reset_gen()
 
+    tkns_bckp = TKNS # bckp in case batch skipped
     end_pref_orig, end_pref, end_pref_after_injections = preprocess_prefix()
 
     if RESETTING:
@@ -1147,7 +1151,7 @@ def generate_new():
             "chars": chars,
             "messages": messages,
             "perplexities": data["perplexities"].tolist(),
-            "seconds": args.wait_for_master,
+            "seconds": args.wait,
             "countdown": True,
         }
     )
@@ -1158,8 +1162,10 @@ def generate_new():
     # batch skipped by master
     if BATCH_MSG_IND == -2:
         with LeLocle:
+            TKNS = tkns_bckp
             BATCH_MSG_IND = None
             IS_GENERATING = False
+        send_three_dots()
         return True
 
     if RESETTING:
@@ -1448,8 +1454,8 @@ def send_config():
         "temperature": args.temperature,
         "top_p": args.top_p,
         "top_k": args.top_k,
-        "print_speed": args.print_speed,
-        "random_threshold": args.random_threshold,
+        "tempo": args.tempo,
+        "threshold": args.threshold,
     }
     if args.mode == "legacy":
         config.update(
@@ -1464,8 +1470,8 @@ def send_config():
                 "character": args.character,
                 "subtext": args.subtext,
                 "first_words": args.first_words,
-                "wait_for_master": args.wait_for_master,
-                "sleepy_time": args.sleepy_time,
+                "wait": args.wait,
+                "pause": args.pause,
             }
         )
         if args.mode == "optimizer":
@@ -1484,7 +1490,7 @@ def set_config(data):
             if k in {"user", "id", "run", "model"}:
                 continue
             try:
-                if k in {"sleepy_time", "print_speed"}:
+                if k in {"pause", "tempo"}:
                     v = type(args.__getattribute__(k))(v)
                     v = v if v > 0 else 0.0001
                 else:
