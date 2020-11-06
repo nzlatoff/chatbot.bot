@@ -21,7 +21,7 @@ import sys
 # numpy cosmetics
 np.set_printoptions(formatter={"all": lambda x: f"{str(x):>{5}}"})
 
-# for threshold arg below
+# for silence arg below
 # https://stackoverflow.com/a/12117065
 def float_range(x):
     try:
@@ -139,11 +139,11 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--threshold",
+    "--silence",
     type=float_range,
     default=0.0,
     help="""A random number between 0 and 1 is generated each time the network
-    receives a new message. If the number is above the threshold, the network
+    receives a new message. If the number is above the silence, the network
     answers. Must lie withinin [0:1]. Defaults to 0 (the network answering
     mechanism is fired every time).""",
 )
@@ -706,7 +706,7 @@ def le_random_wall(fn):
     global IS_GENERATING
     rand = random.random()
     pprint(f"(random has spoken: {rand})", sp_bf=True)
-    if rand > args.threshold:
+    if rand > args.silence:
         pprint("(le grreat rrrandom is bountiful, let's think)",)
         if not try_catch_wrapper(fn):
             return False
@@ -1455,7 +1455,7 @@ def send_config():
         "top_p": args.top_p,
         "top_k": args.top_k,
         "tempo": args.tempo,
-        "threshold": args.threshold,
+        "silence": args.silence,
     }
     if args.mode == "legacy":
         config.update(
