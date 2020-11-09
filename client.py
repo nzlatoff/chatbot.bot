@@ -1465,6 +1465,7 @@ def send_config():
         "top_k": args.top_k,
         "tempo": args.tempo,
         "silence": args.silence,
+        "batch_size": args.batch_size,
     }
     if args.mode == "legacy":
         config.update(
@@ -1495,6 +1496,7 @@ def set_config(data):
     if data["id"] == BOT_ID:
         pprint("received config:", sep="-", sp_bf=True, und=True)
         longest = len(max(list(data.keys()), key=lambda x: len(x)))
+        b_s = args.batch_size
         for k, v in data.items():
             if k in {"user", "id", "run", "model"}:
                 continue
@@ -1512,6 +1514,26 @@ def set_config(data):
                     pre=True,
                 )
                 continue
+        if b_s != args.batch_size:
+            print("CHANGED BATCH SIZE")
+            global le_model
+            le_model = Model(
+                model_name=args.model,
+                run_name=args.run_name,
+                device=args.device,
+                batch_size=args.batch_size,
+                special_tokens=["<|endoftext|>"]
+                if (args.mode == "legacy")
+                else ["<|s|>", "<|e|>", "<|endoftext|>"],
+            )
+            pprint(
+                f"batch size changed to {args.batch_size}",
+                sp_bf=True,
+                sep="=",
+                sp_aft=True,
+                sep_aft="=",
+            )
+
         pprint("", sep="-")
 
 
