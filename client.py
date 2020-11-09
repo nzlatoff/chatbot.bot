@@ -1514,8 +1514,8 @@ def set_config(data):
                     pre=True,
                 )
                 continue
+        pprint("", sep="-")
         if b_s != args.batch_size:
-            print("CHANGED BATCH SIZE")
             global le_model
             le_model = Model(
                 model_name=args.model,
@@ -1526,6 +1526,7 @@ def set_config(data):
                 if (args.mode == "legacy")
                 else ["<|s|>", "<|e|>", "<|endoftext|>"],
             )
+            reset_session()
             pprint(
                 f"batch size changed to {args.batch_size}",
                 sp_bf=True,
@@ -1533,8 +1534,6 @@ def set_config(data):
                 sp_aft=True,
                 sep_aft="=",
             )
-
-        pprint("", sep="-")
 
 
 @sio.on("server sends choice")
