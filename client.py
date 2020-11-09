@@ -332,8 +332,7 @@ def index_from_master():
         if RESETTING:
             return False
         pprint(
-            f"(waiting for batch choice for {args.wait - i + 1} seconds)     ",
-            cr=True,
+            f"(waiting for batch choice for {args.wait - i + 1} seconds)     ", cr=True,
         )
         time.sleep(1)
         i += 1
@@ -800,7 +799,7 @@ def generate_mass():
     if RESETTING:
         return reset_gen()
 
-    tkns_bckp = TKNS # bckp in case batch skipped
+    tkns_bckp = TKNS  # bckp in case batch skipped
     end_pref_orig, end_pref, end_pref_after_injections = preprocess_prefix()
 
     if RESETTING:
@@ -848,7 +847,10 @@ def generate_mass():
         # then produce the rest, until the end token
         try:
             pprint(
-                f"(Danger! {args.server_name} is about to think!)", sep="-", sp_bf=True, sp_aft=True,
+                f"(Danger! {args.server_name} is about to think!)",
+                sep="-",
+                sp_bf=True,
+                sp_aft=True,
             )
             data_until = le_model.gen_until(
                 prefix=data["tokens"],
@@ -1062,7 +1064,7 @@ def generate_new():
     if RESETTING:
         return reset_gen()
 
-    tkns_bckp = TKNS # bckp in case batch skipped
+    tkns_bckp = TKNS  # bckp in case batch skipped
     end_pref_orig, end_pref, end_pref_after_injections = preprocess_prefix()
 
     if RESETTING:
@@ -1106,7 +1108,10 @@ def generate_new():
     # then produce the rest, until the end token
     try:
         pprint(
-            f"(Danger! {args.server_name} is about to think!)", sep="-", sp_bf=True, sp_aft=True,
+            f"(Danger! {args.server_name} is about to think!)",
+            sep="-",
+            sp_bf=True,
+            sp_aft=True,
         )
         data_gen = le_model.gen_until(
             prefix=data["tokens"],
