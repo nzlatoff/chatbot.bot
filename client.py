@@ -352,11 +352,11 @@ def trim_tok(tkns):
         for i in {" ", "\n", " ", "<|s|>", "<|e|>", "<|endoftext|>"}
     }
     # left trimming
-    while tkns[0] in riddance and tkns.size >= 1:
+    while tkns.size >= 1 and tkns[0] in riddance:
         print("TOKS", tkns[0], tkns)
         tkns = tkns[1:]
     # right trimming
-    while tkns[-1] in riddance and tkns.size >= 1:
+    while tkns.size >= 1 and tkns[-1] in riddance:
         print("TOKS", tkns[0], tkns)
         tkns = tkns[:-1]
     return tkns
