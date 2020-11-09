@@ -479,6 +479,7 @@ def preprocess_prefix():
             len_injections += len(hidden_before_encoded)
             with LeLocle:
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
+            args.subtext = ""
 
         if args.first_words:
             args.first_words = args.first_words.strip()
@@ -486,6 +487,7 @@ def preprocess_prefix():
             len_injections += len(inject_after_encoded)
             with LeLocle:
                 TKNS = np.concatenate((TKNS, inject_after_encoded))
+            args.first_words = ""
 
         # markers
         len_injections += SEP_TKNS_LEN
@@ -508,6 +510,7 @@ def preprocess_prefix():
             len_injections += len(hidden_before_encoded)
             with LeLocle:
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
+            args.subtext = ""
 
         end_pref = end_pref_orig + len_injections
 
@@ -521,6 +524,7 @@ def preprocess_prefix():
             after_char_encoded = le_model.encode(f"{args.first_words}")
             with LeLocle:
                 TKNS = np.concatenate((TKNS, after_char_encoded))
+            args.first_words = ""
             # end_pref_after_injections += len(after_char_encoded)
 
     return end_pref_orig, end_pref, end_pref_after_injections
