@@ -62,9 +62,10 @@ class Model:
             self.decoder = self.enc.decoder
         self.special_tokens = set(special_tokens)
         self.hparams = model.default_hparams()
+        if self.hparams.get("dtype") is None:
+            self.hparams.add_hparam("dtype", tf.float32)
         with open(f"models/{model_name}/hparams.json") as f:
             self.hparams.override_from_dict(json.load(f))
-        self.hparams.add_hparam("precision", tf.float32)
         self.batch_size = batch_size
         self.context = tf.compat.v1.placeholder(
             tf.int32, [self.batch_size, None], name="context"
