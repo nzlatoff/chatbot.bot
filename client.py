@@ -1638,6 +1638,6 @@ else:
         sio.connect(url)
     else:
         user_pass = b64encode(b"username:password").decode("ascii")
-        url = "https://spark.theatrophone.fr"
+        url = "***MAIN WEB ADDRESS***  "
         sio.connect(url, {"Authorization": "Basic %s" % user_pass})
 sio.wait()
