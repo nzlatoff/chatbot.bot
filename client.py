@@ -1638,6 +1638,6 @@ else:
         sio.connect(url)
     else:
         user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")
-        url = "https://spark.theatrophone.fr"
+        url = "https://chatbot.manufacture-recherche.ch/ "
         sio.connect(url, {"Authorization": "Basic %s" % user_pass})
 sio.wait()
