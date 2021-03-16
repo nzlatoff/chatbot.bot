@@ -1355,7 +1355,7 @@ def reset_session():
             TKNS = SEP_TKNS
             PREFIX = ""
         pprint(
-            "not thinking right now, wiping everything",
+            f"{args.server_name} not thinking right now, wiping everything",
             sp_bf=True,
             sep="=",
             sp_aft=True,
