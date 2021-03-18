@@ -735,9 +735,8 @@ def le_warning(has_warned):
 def sleepy_times():
     r = np.random.uniform(1, 1 + args.pause)
     pprint(
-        f"(sleepy timezz for {args.server_name}: {r} seconds.)", sep="-", sp_bf=True,
+        f"(sleepy timezz for {args.server_name}: {r:.1f} second(s) (max:  {1 + args.pause}).)", sep="-", sp_bf=True,
     )
-    pprint(f"(the max could have been:  {1 + args.pause})")
     time.sleep(r)
 
 
