@@ -1459,6 +1459,7 @@ def send_config():
         "user": args.server_name,
         "model": args.model,
         "run": args.run_name,
+        "mode": args.mode,
         "temperature": args.temperature,
         "top_p": args.top_p,
         "top_k": args.top_k,
@@ -1492,10 +1493,12 @@ def send_config():
 
 @sio.on("server sets bot config")
 def set_config(data):
+    global HAS_STARTED
     if data["id"] == BOT_ID:
         pprint("received config:", sep="-", sp_bf=True, und=True)
         longest = len(max(list(data.keys()), key=lambda x: len(x)))
         b_s = args.batch_size
+        prev_mode = args.mode
         for k, v in data.items():
             if k in {"user", "id", "run", "model"}:
                 continue
@@ -1514,7 +1517,10 @@ def set_config(data):
                 )
                 continue
         pprint("", sep="-")
-        if b_s != args.batch_size:
+        if prev_mode != args.mode:
+            if args.mode == "reactive":
+                with LeLocle:
+                    HAS_STARTED = False
             global le_model
             le_model = Model(
                 model_name=args.model,
