@@ -1497,7 +1497,7 @@ def set_config(data):
     if data["id"] == BOT_ID:
         pprint("received config:", sep="-", sp_bf=True, und=True)
         longest = len(max(list(data.keys()), key=lambda x: len(x)))
-        b_s = args.batch_size
+        prev_batch = args.batch_size
         prev_mode = args.mode
         for k, v in data.items():
             if k in {"user", "id", "run", "model"}:
@@ -1521,6 +1521,7 @@ def set_config(data):
             if args.mode == "reactive":
                 with LeLocle:
                     HAS_STARTED = False
+        if prev_batch != args.batch_size:
             global le_model
             le_model = Model(
                 model_name=args.model,
