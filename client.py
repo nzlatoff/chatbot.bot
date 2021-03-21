@@ -1518,11 +1518,20 @@ def set_config(data):
                 continue
         pprint("", sep="-")
         if prev_mode != args.mode:
+            pprint(
+                f"{args.server_name} switched mode from {prev_mode} to {args.mode}",
+                sp_aft=True,
+                sep_aft="-",
+                pre=True,
+            )
             if args.mode == "reactive":
                 with LeLocle:
                     HAS_STARTED = False
         if prev_batch != args.batch_size:
             global le_model
+            pprint(
+                f"WAIT! {args.server_name}'s batch size change in process...", sp_bf=True, sep="=",
+            )
             le_model = Model(
                 model_name=args.model,
                 run_name=args.run_name,
@@ -1534,9 +1543,7 @@ def set_config(data):
             )
             reset_session()
             pprint(
-                f"batch size changed to {args.batch_size}",
-                sp_bf=True,
-                sep="=",
+                f"Ya! Batch size changed to {args.batch_size}.",
                 sp_aft=True,
                 sep_aft="=",
             )
