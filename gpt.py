@@ -318,8 +318,9 @@ class Model:
             context_tkns = tkns
             i += 1
         if i < sanity_limit:
-            tkns = [t[: batch_data[i]["index"]] for i, t in enumerate(tkns)]
-            logits = [l[: batch_data[i]["index"]] for i, l in enumerate(logits)]
+            print('SANITY LIMIT')
+        tkns = [t[: batch_data[i]["index"]] for i, t in enumerate(tkns)]
+        logits = [l[: batch_data[i]["index"]] for i, l in enumerate(logits)]
         tkns = tkns if not self.reverse else [t[::-1] for t in tkns]
         logits = logits if not self.reverse else [l[::-1] for l in logits]
         perplexities = []
