@@ -1524,7 +1524,7 @@ def set_config(data):
         pprint("", sep="-")
         if prev_mode != args.mode:
             pprint(
-                f"{args.server_name} switched mode from {prev_mode} to {args.mode}",
+                f"{args.server_name} is now {args.mode} (switched from {prev_mode}).",
                 sp_aft=True,
                 sep_aft="-",
                 pre=True,
