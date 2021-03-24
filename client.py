@@ -735,7 +735,9 @@ def le_warning(has_warned):
 def sleepy_times():
     r = np.random.uniform(1, 1 + args.pause)
     pprint(
-        f"(sleepy timezz for {args.server_name}: {r:.1f} second(s) (max:  {1 + args.pause}).)", sep="-", sp_bf=True,
+        f"(sleepy timezz for {args.server_name}: {r:.1f} second(s) (max:  {1 + args.pause}).)",
+        sep="-",
+        sp_bf=True,
     )
     time.sleep(r)
 
@@ -1463,12 +1465,12 @@ def send_config():
         "model": args.model,
         "run": args.run_name,
         "mode": args.mode,
+        "batch_size": args.batch_size,
         "temperature": args.temperature,
+        "silence": args.silence,
         "top_p": args.top_p,
         "top_k": args.top_k,
         "tempo": args.tempo,
-        "silence": args.silence,
-        "batch_size": args.batch_size,
     }
     if args.mode == "legacy":
         config.update(
@@ -1481,8 +1483,8 @@ def send_config():
         config.update(
             {
                 "character": args.character,
-                "subtext": args.subtext,
                 "first_words": args.first_words,
+                "subtext": args.subtext,
                 "wait": args.wait,
                 "pause": args.pause,
             }
@@ -1533,7 +1535,9 @@ def set_config(data):
         if prev_batch != args.batch_size:
             global le_model
             pprint(
-                f"WAIT! {args.server_name}'s batch size change in process...", sp_bf=True, sep="=",
+                f"WAIT! {args.server_name}'s batch size change in process...",
+                sp_bf=True,
+                sep="=",
             )
             le_model = Model(
                 model_name=args.model,
