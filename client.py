@@ -1548,7 +1548,7 @@ def set_config(data):
                 if (args.mode == "legacy")
                 else ["<|s|>", "<|e|>", "<|endoftext|>"],
             )
-            reset_session()
+            # reset_session()
             pprint(
                 f"Ya! Batch size changed to {args.batch_size}.",
                 sp_aft=True,
