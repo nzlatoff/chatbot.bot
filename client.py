@@ -1347,6 +1347,9 @@ def reset_session():
     else:
         MESSAGES = []
         send_three_dots()
+        args.character = ""
+        args.first_words = ""
+        args.subtext = ""
         with LeLocle:
             RECEIVED_MSGS = np.array([], dtype=np.int32)
             BATCH_MSG_IND = None
