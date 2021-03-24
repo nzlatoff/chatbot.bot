@@ -317,7 +317,7 @@ class Model:
                 # pprint(msg, term_trim=term.width, pre=True)
             context_tkns = tkns
             i += 1
-        if i < sanity_limit:
+        if i >= sanity_limit:
             print('SANITY LIMIT')
         tkns = [t[: batch_data[i]["index"]] for i, t in enumerate(tkns)]
         logits = [l[: batch_data[i]["index"]] for i, l in enumerate(logits)]
