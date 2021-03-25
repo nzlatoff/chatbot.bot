@@ -529,6 +529,13 @@ def preprocess_prefix():
     return end_pref_orig, end_pref, end_pref_after_injections
 
 
+# https://stackoverflow.com/a/50425683
+def softmax(x, axis=None):
+    x = x - x.max(axis=axis, keepdims=True)
+    y = np.exp(x)
+    return y / y.sum(axis=axis, keepdims=True)
+
+
 def select_in_batch(data, chars, messages):
 
     global BATCH_MSG_IND
@@ -536,12 +543,10 @@ def select_in_batch(data, chars, messages):
     if BATCH_MSG_IND == -1:
         if args.bot_choice == "sampling":
             # smallest perps given most weight
-            invert_perps = 1 - data["perplexities"]
-            s = invert_perps.sum()
-            normed = np.nan_to_num(invert_perps / s)
+            flipped = softmax(-data["perplexities"])
             with LeLocle:
                 BATCH_MSG_IND = np.random.choice(
-                    invert_perps.shape[0], 1, p=normed.flatten()
+                    data["perplexities"].shape[0], 1, p=flipped.flatten()
                 ).item()
         elif args.bot_choice == "min":
             with LeLocle:
