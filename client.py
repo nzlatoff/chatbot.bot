@@ -332,11 +332,11 @@ def index_from_master():
         if RESETTING:
             return False
         pprint(
-            f"(waiting for batch choice for {args.wait - i + 1} seconds)     ", cr=True,
+            f"(waited for choice for {i + 1} seconds)     ", cr=True,
         )
         time.sleep(1)
         i += 1
-        if i > args.wait + 2:
+        if i > args.wait + 10:
             pprint(f"waited enough, {args.server_name} taking back control!")
             with LeLocle:
                 BATCH_MSG_IND = -1
