@@ -1,8 +1,11 @@
 # vim files
 *.sw*
 
+# python
 __pycache__
 .ipynb_checkpoints
+
+tags
 
 src
 models
