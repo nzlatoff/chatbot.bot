@@ -1652,8 +1652,6 @@ def send_direct_message(data):
 
 pprint = partial(pprint, fn=send_entrails)
 
-
-user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")
 if args.local:
     url = "http://localhost:5100"
     sio.connect(url)
