@@ -135,7 +135,8 @@ parser.add_argument(
     "--length_desired",
     type=int,
     default=500,
-    help="Rank under which sentences are allowed to be sent. Defaults to 25.",
+    help="""LEGACY ONLY (before end tokens were introduced). Length of text
+    before the bot stops. Defaults to 500.""",
 )
 
 parser.add_argument(
