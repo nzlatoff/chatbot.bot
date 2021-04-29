@@ -10,13 +10,13 @@ chatbot/
 |- bot/
 ```
 
-The main bulk of the installation consists in getting Tensorflow 1.4 to work. Please follow the installation procedure on [fork of GPT-2](https://github.com/jchwenger/gpt-2/tree/chatbot/README.md#Installation) that was used for the project. Once the installation is done, you can activate the conda environment like so:
+The main bulk of the installation consists in getting Tensorflow 1.4 to work. Please follow the [installation procedure in the gpt-2 repo](https://github.com/jchwenger/gpt-2/tree/chatbot/README.md#Installation) that was used for the project. Once the installation is done, you can activate the conda environment like so:
 
 ```bash
 conda activate chatbot
 ```
 
-First, install the gpt-2 folder and the models (see the repo for instructions). Going back to `bot/`, add the following symlinks:
+It is essential to set everything up in the gpt-2 folder first,  and to have the models ready (see the repo for instructions). After having done that, going back to `bot/`, add the following symlinks:
 
 ```bash
 ln -s ../gpt-2/models
@@ -24,9 +24,29 @@ ln -s ../gpt-2/checkpoint
 ln -s ../gpt-2/src
 ```
 
+In order to tell `python` where to find the code of the model, the `src` folder is added to the path, like so: `PYTHONPATH=src python ...`.
+
+The usual folder structure when training/finetuning models is to have the original model (e.g. downloaded from OpenAI directly) in the `models/` folder, and the finetuned one in `checkpoint/`. However, that is not necessarily the case when creating a model from scratch. In this case, the model folder in `models/` will only contain the configuration files and no weights, while the actual model will only be saved in `checkpoint`. When selecting the `--model` parameter below, that will point to the model parameter files in `models/`, whereas `--run_name` points to the weights in `checkpoint/`.
+
+As a consequence, a model in `models/model_name` must contain at least those files:
+
+```bash
+encoder.json
+hparams.json
+vocab.bpe
+```
+
+While the `checkpoint/run_name` folder has to contain the data (among other things, used for training):
+
+```bash
+model-2343037.data-00000-of-00001
+model-2343037.index
+model-2343037.meta
+```
+
 ## Use
 
-**Important note: don't forget to add the path to the /src folder using `PYTHONPATH=src`**
+**Important note, once again: don't forget to add the path to the /src folder using `PYTHONPATH=src`**
 
 ```
 $ PYTHONPATH=src python client.py --help
@@ -35,11 +55,10 @@ usage: client.py [-h] [--model MODEL] [--run_name RUN_NAME]
                  [--mode {legacy,reactive,autonomous,optimizer}]
                  [--device DEVICE] [--batch_size BATCH_SIZE]
                  [--temperature TEMPERATURE] [--top_p TOP_P] [--top_k TOP_K]
-                 [--tempo TEMPO] [--local] [--heroku]
-                 [--length_desired LENGTH_DESIRED] [--silence SILENCE]
-                 [--pause PAUSE] [--rank_threshold RANK_THRESHOLD]
-                 [--character CHARACTER] [--subtext SUBTEXT]
-                 [--first_words FIRST_WORDS] [--wait WAIT]
+                 [--tempo TEMPO] [--local] [--length_desired LENGTH_DESIRED]
+                 [--silence SILENCE] [--pause PAUSE]
+                 [--rank_threshold RANK_THRESHOLD] [--character CHARACTER]
+                 [--subtext SUBTEXT] [--first_words FIRST_WORDS] [--wait WAIT]
                  [--bot_choice {sampling,min,max}] [--patience PATIENCE]
                  [--limit_prefix LIMIT_PREFIX]
 
@@ -71,11 +90,10 @@ optional arguments:
   --tempo TEMPO         Length of pause for each step of interactive print
                         loop, in ms. (default: 0.1)
   --local               Run with local server, port 5100. (default: False)
-  --heroku              Run with heroku. Default:
-                        https://spark.theatrophone.fr/. (default: False)
   --length_desired LENGTH_DESIRED
-                        Rank under which sentences are allowed to be sent.
-                        Defaults to 25. (default: 500)
+                        LEGACY ONLY (before end tokens were introduced).
+                        Length of text before the bot stops. Defaults to 500.
+                        (default: 500)
   --silence SILENCE     A random number between 0 and 1 is generated each time
                         the network receives a new message. If the number is
                         above the silence, the network answers. Must lie
@@ -133,7 +151,6 @@ optional arguments:
   --limit_prefix LIMIT_PREFIX
                         Preemptively limit the length of the prefix, to avoid
                         OOM issues. Defaults to 200. (default: 200)
-
 ```
 
 ## GPT-2 Wrapper
