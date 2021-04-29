@@ -53,20 +53,20 @@ parser.add_argument(
     "--model",
     type=str,
     default="117M",
-    help="Model for forward model. Defaults to '117M'.",
+    help="Model path (params).",
 )
 
 parser.add_argument(
     "--run_name",
     type=str,
     default="run1",
-    help="Run name for forward model. Defaults to 'run1'.",
+    help="Run name path (weights).",
 )
 
 parser.add_argument(
     "--server_name",
     type=str,
-    default="Le Serveur",
+    default="La Manufactrice",
     help="Server name used in message.",
 )
 
@@ -81,14 +81,14 @@ parser.add_argument(
     "--device",
     type=str,
     default="/GPU:0",
-    help="The GPU on which the net will be run. Default: /GPU:0.",
+    help="The GPU on which the net will be run.",
 )
 
 parser.add_argument(
     "--batch_size",
     type=int,
     default=1,
-    help="""Number of sentences generated in parallel.  Defaults to 1.""",
+    help="""Number of sentences generated in parallel.""",
 )
 
 parser.add_argument(
@@ -103,7 +103,7 @@ parser.add_argument(
     tokens the combined probability of which is at most p (sometimes the
     combined probability of a few tokens reaches p (only a few likely choices),
     sometimes many thousands are needed to reach the same p (high uncertainty /
-    many possible choices). Defaults to 0.998 (1 to neutralise).""",
+    many possible choices). (1 to neutralise).""",
 )
 
 parser.add_argument(
@@ -111,7 +111,7 @@ parser.add_argument(
     type=int,
     default=0,
     help="""Limit sampled tokens to the k most
-    likely ones. Defaults to 0 (deactivated).""",
+    likely ones. (0 to neutralise).""",
 )
 
 parser.add_argument(
@@ -130,7 +130,7 @@ parser.add_argument(
     type=int,
     default=500,
     help="""LEGACY ONLY (before end tokens were introduced). Length of text
-    before the bot stops. Defaults to 500.""",
+    before the bot stops.""",
 )
 
 parser.add_argument(
@@ -139,7 +139,7 @@ parser.add_argument(
     default=0.0,
     help="""A random number between 0 and 1 is generated each time the network
     receives a new message. If the number is above the silence, the network
-    answers. Must lie withinin [0:1]. Defaults to 0 (the network answering
+    answers. Must lie withinin [0:1]. (when set to 0 the network answering
     mechanism is fired every time).""",
 )
 
@@ -156,14 +156,14 @@ parser.add_argument(
     "--rank_threshold",
     type=int,
     default=25,
-    help="Rank under which sentences are allowed to be sent. Defaults to 25.",
+    help="Rank under which sentences are allowed to be sent.",
 )
 
 parser.add_argument(
     "--character",
     type=str,
     default="",
-    help="Character used by the network when answering. Defaults to none.",
+    help="Character used by the network when answering.",
 )
 
 parser.add_argument(
@@ -172,8 +172,7 @@ parser.add_argument(
     default="",
     help="""Additional text inserted at the end of each received message, before
     the network produces the next character & answer (can
-    influence the overall theme and stabilise the network). Defaults to
-    nothing.""",
+    influence the overall theme and stabilise the network).""",
 )
 
 parser.add_argument(
@@ -185,7 +184,7 @@ parser.add_argument(
     not artificially set as well, this start of line becomes the same as the
     subtext: the text is added at the end of the received messages,
     and the network is free to produce any answer (coloured, however, by the
-    context). Defaults to nothing.""",
+    context)..""",
 )
 
 parser.add_argument(
@@ -195,8 +194,7 @@ parser.add_argument(
     help="""Waiting time before activating the default message choice. When
     generating with more than one message per batch, the /master can choose the
     message, in the time frame here defined, after which the standard choice
-    process kicks in. Defaults to 0 seconds (no wait, the master sets it from
-    /master).""",
+    process kicks in. (0 means no wait, the master sets it from /master).""",
 )
 
 parser.add_argument(
@@ -221,15 +219,14 @@ parser.add_argument(
     to produce a new sentence that makes it into the n best ones. Patience is
     the number of times the bot is allowed *not* to produce any new sentence
     making it into the n best ones: once this happens, the batch is submitted
-    (either to be directly posted, or evaluated by the master. Default: 3.""",
+    (either to be directly posted, or evaluated by the master.""",
 )
 
 parser.add_argument(
     "--limit_prefix",
     type=int,
     default=200,
-    help="""Preemptively limit the length of the prefix, to avoid OOM issues.
-    Defaults to 200.""",
+    help="""Preemptively limit the length of the prefix, to avoid OOM issues.""",
 )
 
 args = parser.parse_args()
