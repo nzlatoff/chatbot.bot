@@ -4,6 +4,7 @@ from operator import itemgetter
 from print_utils import term
 import numpy as np
 import encoder_hug
+import argparse
 import encoder
 import random
 import model
@@ -1666,8 +1667,49 @@ class Model:
 
 
 if __name__ == "__main__":
-    m = Model(batch_size=20)
-    data = m.run("LE COMTE.", length=200)
+
+    parser = argparse.ArgumentParser(
+        description="""Generating a batch & showing the perplexities. """,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="117M",
+        help="Model for forward model.",
+    )
+
+    parser.add_argument(
+        "--run_name",
+        type=str,
+        default="run1",
+        help="Run name for forward model.",
+    )
+
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=4,
+        help="""Number of sentences generated in parallel.""",
+    )
+
+    parser.add_argument(
+        "--length",
+        type=int,
+        default=200,
+        help="""Length of each sentence.""",
+    )
+
+    args = parser.parse_args()
+
+    m = Model(
+        model_name=args.model,
+        run_name=args.run_name,
+        batch_size=args.batch_size,
+        special_tokens="<|endoftext|>",
+    )
+    data = m.run("\n", length=args.length)
     indz = data["perplexities"][:, 0].argsort()[
         ::-1
     ]  # https://stackoverflow.com/a/2828121
@@ -1678,5 +1720,6 @@ if __name__ == "__main__":
     for perp, sentence in zip(sorted_perplexities, m.decode(sorted_seqs)):
         print()
         print(sentence)
-        print(f"\t\t\t\t---> perplexity: {perp[0]:.16f}")
+        print()
+        print(f"---> perplexity: {perp[0]:.16f}")
         print("--------------------------------")
