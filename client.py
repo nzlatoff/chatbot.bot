@@ -126,12 +126,6 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--heroku",
-    action="store_true",
-    help="Run with heroku. Default: https://spark.theatrophone.fr/.",
-)
-
-parser.add_argument(
     "--length_desired",
     type=int,
     default=500,
@@ -1657,11 +1651,7 @@ if args.local:
     url = "http://localhost:5100"
     sio.connect(url)
 else:
-    if args.heroku:
-        url = "***HEROKU WEB ADDRESS***"
-        sio.connect(url)
-    else:
-        user_pass = b64encode(b"username:password").decode("ascii")
-        url = "***MAIN WEB ADDRESS***  "
-        sio.connect(url, {"Authorization": "Basic %s" % user_pass})
+    user_pass = b64encode(b"username:password").decode("ascii")
+    url = "***MAIN WEB ADDRESS***  "
+    sio.connect(url, {"Authorization": "Basic %s" % user_pass})
 sio.wait()
