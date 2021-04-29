@@ -4,7 +4,7 @@ A GPT-2 Wrapper Class & Web Client
 
 ## Installation
 
-This repository works in close partnership with a [fork of GPT-2](https://github.com/jchwenger/gpt-2/tree/chatbot). Pull this repo somewhere on your machine, for instance in the same directory as this one. The two repositories work hand in hand, here is the recommended folder structure:
+This repository works in close partnership with a [fork of GPT-2](https://github.com/jchwenger/gpt-2/tree/chatbot), as well as a [web server](https://github.com/jchwenger/chatbot.interface). Pull this repo somewhere on your machine, for instance in the same directory as this one. The two repositories work hand in hand, here is the recommended folder structure:
 
 ```bash
 chatbot/
@@ -48,6 +48,8 @@ model-2343037.meta
 ## Use
 
 **Important note, once again: don't forget to add the path to the /src folder using `PYTHONPATH=src`**
+
+Also, without the [web server](https://github.com/jchwenger/chatbot.interface) the client won't work. At the bottom of `client.py` ([here](https://github.com/jchwenger/chatbot.bot/blob/master/client.py#L1650-1653)), you will find the place to change the web address where it is hosted (it is also possible to run it locally, in one terminal window, and to pass `--local` to the client). The server we used required an authorization with username and password, located in the sampe place, which should be changed or removed.
 
 ```
 $ PYTHONPATH=src python client.py --help
