@@ -126,12 +126,6 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--heroku",
-    action="store_true",
-    help="Run with heroku. Default: https://spark.theatrophone.fr/.",
-)
-
-parser.add_argument(
     "--length_desired",
     type=int,
     default=500,
@@ -1657,11 +1651,7 @@ if args.local:
     url = "http://localhost:5100"
     sio.connect(url)
 else:
-    if args.heroku:
-        url = "https://shrouded-stream-73690.herokuapp.com/"
-        sio.connect(url)
-    else:
-        user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")
-        url = "https://chatbot.manufacture-recherche.ch/ "
-        sio.connect(url, {"Authorization": "Basic %s" % user_pass})
+    user_pass = b64encode(b"guest:vuVpm77e").decode("ascii")
+    url = "https://chatbot.manufacture-recherche.ch/ "
+    sio.connect(url, {"Authorization": "Basic %s" % user_pass})
 sio.wait()
