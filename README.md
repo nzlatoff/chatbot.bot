@@ -1,6 +1,6 @@
 # CHATBOT: BOT
 
-A GPT-2 Wrapper Class & Web Client
+The GPT-2 wrapper class & web client for the project [CHATBOT](http://www.manufacture.ch/fr/4467/CHATBOT-jouer-et-dialoguer-avec-un-agent-conversationnel-acteur), led by [Nicolas Zlatoff](http://www.manufacture.ch/en/1695/Nicolas-Zlatoff) at the [Manufacture University of Performing Arts](http://www.manufacture.ch/en/) in Lausanne, Switzerland.
 
 ## Installation
 
