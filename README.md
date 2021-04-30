@@ -51,6 +51,8 @@ model-2343037.meta
 
 Also, without the [web server](https://github.com/jchwenger/chatbot.interface) the client won't work. At the bottom of `client.py` ([here](https://github.com/jchwenger/chatbot.bot/blob/master/client.py#L1650-1653)), you will find the place to change the web address where it is hosted (it is also possible to run it locally, in one terminal window, and to pass `--local` to the client). The server we used required an authorization with username and password, located in the sampe place, which should be changed or removed.
 
+Note: the `--mode legacy` is intended to work with the [legacy web interface](https://github.com/jchwenger/chatbot.legacy) (but on a web server requiring a GPU, or only locally, and without special tokens, hence the new version). This was left aside as a work in progress, and is not guaranteed to work.
+
 ```
 $ PYTHONPATH=src python client.py --help
 usage: client.py [-h] [--model MODEL] [--run_name RUN_NAME]
