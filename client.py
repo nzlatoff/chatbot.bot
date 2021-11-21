@@ -861,12 +861,12 @@ def generate_mass():
             )
 
         except Exception as e:
-            handle_error("gen_avoiding", end_pref_orig, e)
+            handle_error("gen_avoiding", end_pref, e)
             return reset_gen()
 
         # pprint("(gen avoiding)", sep="-", sp_bf=True, sp_aft=True)
         # for i, tkn in enumerate(data["tokens"]):
-        #     pprint(le_model.decode(tkn[end_pref_orig:]).strip())
+        #     pprint(le_model.decode(tkn[end_pref:]).strip())
         #     pprint(f"(perplexity: {data['perplexities'][i].item()})")
         #     if args.batch_size > 1:
         #         pprint("*")
@@ -904,7 +904,7 @@ def generate_mass():
                     break
 
         except Exception as e:
-            handle_error("gen_until", end_pref_orig, e)
+            handle_error("gen_until", end_pref, e)
             return reset_gen()
 
         if suitors["perplexities"].size == 0:
@@ -1112,12 +1112,12 @@ def generate_new():
         )
 
     except Exception as e:
-        handle_error("gen_avoiding", end_pref_orig, e)
+        handle_error("gen_avoiding", end_pref, e)
         return reset_gen()
 
     # for i in range(args.batch_size):
     #     pprint(
-    #         f"{le_model.decode(data['tokens'][i][end_pref_orig:]).strip()}"
+    #         f"{le_model.decode(data['tokens'][i][end_pref:]).strip()}"
     #     )
     #     pprint(
     #         f"(perplexity: {data['perplexities'][i].item()})"
@@ -1158,7 +1158,7 @@ def generate_new():
                 break
 
     except Exception as e:
-        handle_error("gen_until", end_pref_orig, e)
+        handle_error("gen_until", end_pref, e)
         return reset_gen()
 
     # sort the sequences, if the batch_size is greater than 1
