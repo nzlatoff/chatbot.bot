@@ -344,11 +344,9 @@ def trim_tok(tkns):
     }
     # left trimming
     while tkns.size >= 1 and tkns[0] in riddance:
-        print("TOKS", tkns[0], tkns)
         tkns = tkns[1:]
     # right trimming
     while tkns.size >= 1 and tkns[-1] in riddance:
-        print("TOKS", tkns[0], tkns)
         tkns = tkns[:-1]
     return tkns
 
