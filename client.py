@@ -360,7 +360,6 @@ def fancy_tok_typing(tkns):
     pprint(
         f"(alright, {args.server_name} sending les tokens to humans...)",
         sep="-",
-        sp_bf=True,
         sp_aft=True,
     )
     tkns = trim_tok(tkns)
@@ -597,7 +596,7 @@ def select_in_batch(data, chars, messages):
         pprint(char.strip())
         pprint(message)
         pprint(
-            f"(perplexity: {data['perplexities'][BATCH_MSG_IND].item()})", sp_bf=True
+            f"(perplexity: {data['perplexities'][BATCH_MSG_IND].item()})",
         )
     else:
         char = chars[BATCH_MSG_IND]
@@ -606,7 +605,7 @@ def select_in_batch(data, chars, messages):
         pprint(char)
         pprint(message)
         pprint(
-            f"(perplexity: {data['perplexities'][BATCH_MSG_IND].item()})", sp_bf=True
+            f"(perplexity: {data['perplexities'][BATCH_MSG_IND].item()})",
         )
     return char, message
 
@@ -689,6 +688,7 @@ def extract_chars_msgs(generated, data):
 
     chars = []
     messages = []
+    pprint("", sep="-")
     for i, g in enumerate(generated):
         if g.find("\n") == -1:
             char = ""
@@ -697,11 +697,11 @@ def extract_chars_msgs(generated, data):
             char = g[: g.find("\n")].strip()
             message = g[g.find("\n") + 1 :].strip()
 
-        # pprint(char)
-        # pprint(message)
-        # pprint(f"(perplexity: {data['perplexities'][i].item()})")
-        # if args.batch_size > 1 and i < args.batch_size - 1:
-        #     pprint("*")
+        pprint(char)
+        pprint(message)
+        pprint(f"(perplexity: {data['perplexities'][i].item()})")
+        if args.batch_size > 1 and i < args.batch_size - 1:
+            pprint("*")
 
         chars.append(char)
         messages.append(message)
@@ -919,7 +919,7 @@ def generate_mass():
             if RESETTING:
                 return reset_gen()
 
-            # pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
+            pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
 
             if RESETTING:
                 return reset_gen()
@@ -959,7 +959,7 @@ def generate_mass():
             if RESETTING:
                 return reset_gen()
 
-            # pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
+            pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
 
             if RESETTING:
                 return reset_gen()
