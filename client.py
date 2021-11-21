@@ -610,7 +610,7 @@ def select_in_batch(data, chars, messages):
     return char, message
 
 
-def handle_error(fn_name, end_pref_orig, e, trimming_factor=1 / 6, sleep_for=5):
+def handle_error(fn_name, end_pref_orig, e, trimming_factor=5 / 6, sleep_for=5):
 
     global TKNS_LEN_THRESHOLD
     global TKNS
