@@ -436,9 +436,18 @@ def fancy_typing(char, message):
 
 def preprocess_prefix():
 
+    global TKNS_LEN_THRESHOLD
     global SEP_TKNS_LEN
     global SEP_TKNS
     global TKNS
+
+    # end_pref_orig: before all injections
+    # if not char:
+    #   end_pref: len after all injections
+    #   end_pref_after_injections: unused (same as end_pref)
+    # else:
+    #   end_pref: len after subtext
+    #   end_pref_after_injections: len after char
 
     end_pref_orig = len(TKNS)
     end_pref = end_pref_orig
@@ -447,13 +456,6 @@ def preprocess_prefix():
 
     # pprint("(tkns)", sep="-", sp_bf=True)
     # pprint(str(TKNS), sp_aft=True)
-
-    if TKNS.size > SEP_TKNS_LEN:
-        pprint("(currently in memory:)", sp_bf=True, sp_aft=True)
-        pprint(le_model.decode(TKNS).strip(), sp_aft=True)
-        pprint(f"(length: {end_pref_orig})")
-    else:
-        pprint("(nothing in memory!)", sp_bf=True)
 
     if not args.character:
 
@@ -484,6 +486,7 @@ def preprocess_prefix():
             TKNS = np.concatenate((TKNS, SEP_TKNS))
 
         end_pref = end_pref_orig + len_injections
+        end_pref_after_injections = end_pref
 
     else:
 
@@ -515,6 +518,48 @@ def preprocess_prefix():
                 TKNS = np.concatenate((TKNS, after_char_encoded))
             args.first_words = ""
             # end_pref_after_injections += len(after_char_encoded)
+
+    if TKNS.size >= TKNS_LEN_THRESHOLD:
+        pprint(
+            "(REACHED THRESHOLD LENGTH, TRIMMING)",
+            sep="=",
+            sp_bf=True,
+            sep_aft="=",
+            sp_aft=True,
+        )
+        with LeLocle:
+
+            # readjust prefix params
+
+            # print()
+            # print('before')
+            # print(f"end_pref: {end_pref}")
+            # print(f"end_pref_orig: {end_pref_orig}")
+            # print(f"end_pref_after_injections: {end_pref_after_injections}")
+            # print(f"len_injections: {len_injections}")
+
+            excess = TKNS.size - TKNS_LEN_THRESHOLD
+            end_pref = end_pref - excess if excess < end_pref else 0
+            end_pref_orig = end_pref_orig - excess if excess < end_pref_orig else 0
+            end_pref_after_injections = end_pref_after_injections - excess if excess < end_pref_after_injections else 0
+            if len_injections > TKNS_LEN_THRESHOLD: len_injections = TKNS_LEN_THRESHOLD
+
+            # print()
+            # print('after')
+            # print(f"excess: {excess}")
+            # print(f"end_pref: {end_pref}")
+            # print(f"end_pref_orig: {end_pref_orig}")
+            # print(f"end_pref_after_injections: {end_pref_after_injections}")
+            # print(f"len_injections: {len_injections}")
+
+            TKNS = TKNS[-TKNS_LEN_THRESHOLD:]
+
+    if TKNS.size > SEP_TKNS_LEN:
+        pprint("(currently in memory:)", sp_bf=True, sp_aft=True)
+        pprint(le_model.decode(TKNS).strip(), sp_aft=True)
+        pprint(f"(length: {end_pref})")
+    else:
+        pprint("(nothing in memory!)", sp_bf=True)
 
     return end_pref_orig, end_pref, end_pref_after_injections
 
@@ -781,17 +826,6 @@ def generate_mass():
 
     process_received_messages()
 
-    if TKNS_LEN_THRESHOLD and TKNS.size >= TKNS_LEN_THRESHOLD:
-        pprint(
-            "(REACHED THRESHOLD LENGTH, TRIMMING)",
-            sep="=",
-            sp_bf=True,
-            sep_aft="=",
-            sp_aft=True,
-        )
-        with LeLocle:
-            TKNS = TKNS[-TKNS_LEN_THRESHOLD:]
-
     if RESETTING:
         return reset_gen()
 
@@ -1049,13 +1083,6 @@ def generate_new():
         return reset_gen()
 
     process_received_messages()
-
-    if TKNS_LEN_THRESHOLD and TKNS.size >= TKNS_LEN_THRESHOLD:
-        pprint(
-            "(REACHED THRESHOLD LENGTH, TRIMMING)", sp_bf=True, sp_aft=True,
-        )
-        with LeLocle:
-            TKNS = TKNS[-TKNS_LEN_THRESHOLD:]
 
     if RESETTING:
         return reset_gen()
