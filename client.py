@@ -229,6 +229,13 @@ parser.add_argument(
     help="""Preemptively limit the length of the prefix, to avoid OOM issues.""",
 )
 
+parser.add_argument(
+    "--chunk_length",
+    type=int,
+    default=5,
+    help="""Number of tokens requested during the gradual generation loop.""",
+)
+
 args = parser.parse_args()
 
 # ----------------------------------------
@@ -684,11 +691,10 @@ def unequal_lists_of_lists_to_np(a, b):
 
 def extract_chars_msgs(generated, data):
 
-    # pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
+    pprint("(generated)", sep="-", sp_bf=True, sp_aft=True)
 
     chars = []
     messages = []
-    pprint("", sep="-")
     for i, g in enumerate(generated):
         if g.find("\n") == -1:
             char = ""
@@ -882,12 +888,13 @@ def generate_mass():
                 sp_bf=True,
                 sp_aft=True,
             )
+            # print('SANITY:', (le_model.hparams.n_ctx - args.limit_prefix)//args.chunk_length)
             data_until = le_model.gen_until(
                 prefix=data["tokens"],
                 until="<|s|>",
                 exclude_until=False,
-                sanity_limit=100,
-                chunk_length=5,
+                sanity_limit=(le_model.hparams.n_ctx - args.limit_prefix)//args.chunk_length,
+                chunk_length=args.chunk_length,
                 temperature=args.temperature,
                 top_p=args.top_p,
                 top_k=args.top_k,
@@ -1136,12 +1143,13 @@ def generate_new():
             sp_bf=True,
             sp_aft=True,
         )
+        # print('SANITY:', le_model.hparams.n_ctx, data["tokens"].shape[-1], args.chunk_length, (le_model.hparams.n_ctx - data["tokens"].shape[-1])//args.chunk_length)
         data_gen = le_model.gen_until(
             prefix=data["tokens"],
             until="<|s|>",
             exclude_until=False,
-            sanity_limit=100,
-            chunk_length=5,
+            sanity_limit=(le_model.hparams.n_ctx - data["tokens"].shape[-1])//args.chunk_length,
+            chunk_length=args.chunk_length,
             temperature=args.temperature,
             top_p=args.top_p,
             top_k=args.top_k,
