@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "chatbot"
+version = "0.1.0"
+description = ""
+authors = ["nz"]
+license = "GPL"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+python-socketio = {version = "4.6.0", extras = ["client"]}
+python-engineio = "==3.14.2"
+blessed = "^1.20.0"
+regex = "^2024.11.6"
+requests = "^2.32.3"
+llama-cpp-python = {extras = ["cuda"], version = "^0.3.8"}
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

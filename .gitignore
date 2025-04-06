@@ -11,3 +11,4 @@ src
 models
 results
 checkpoint
+.venv
