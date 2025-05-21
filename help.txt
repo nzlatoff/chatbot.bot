@@ -1,0 +1,30 @@
+# GIT
+
+git status
+
+(après avoir fait des modifications:)
+git add .
+git commit -m "message"
+git push
+
+# POETRY
+
+Pour lancer un script:
+poetry run python client_llama_cpp.py
+ou simplement:
+make run
+
+Pour installer des packages: 
+```poetry add package==version```
+
+Pour recalculer les dépendances:
+```poetry lock```
+
+Pour installer les packages:
+```poetry install```
+
+Et si ça part en couille:
+```
+rm -rf .venv
+poetry install
+```
