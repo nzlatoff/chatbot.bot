@@ -60,7 +60,8 @@ parser.add_argument(
 parser.add_argument(
     "--run_name",
     type=str,
-    default="/home/spark/dev/models/mtext-141024_mistral-7B-v0.1_merged-Q8-2.gguf",
+    #default="/home/spark/dev/models/mtext-250525_mistral-7B-v0.3_merged.Q8_0.gguf",
+    default="/home/spark/dev/models/mtext-050625_mistral-7B-v0.3_merged.Q8_0.gguf",
     help="Run name path (weights).",
 )
 
@@ -226,7 +227,7 @@ parser.add_argument(
 parser.add_argument(
     "--limit_prefix",
     type=int,
-    default=850,
+    default=3900, # 850
     help="""Preemptively limit the length of the prefix, to avoid OOM issues.""",
 )
 
@@ -304,6 +305,7 @@ class SlidingWindowLLM:
             seed = -1,
             max_tokens=max_tokens,
             stop=["<|e|>"],
+            repeat_penalty = 1.2,
             temperature=self.temperature,
             top_p=self.top_p,
             top_k=self.top_k
@@ -397,7 +399,7 @@ class SlidingWindowLLM:
 
 llm = SlidingWindowLLM(
 	args.run_name,
-	1024,
+	4096, # 1024
 	args.temperature,
 	args.top_p,
     args.top_k)
@@ -508,17 +510,18 @@ def trim_tok(tkns):
     riddance = {
         #le_model.encode(i)[0]
         #llm.model.tokenize(i.encode("utf-8"), add_bos=False)[0]
+        #token for i in {"\n", "<|s|>", "<|e|>", " "}
         token for i in {" ", "<|s|>", "<|e|>", "\n", "  ", "   ", "    ", "     "}
         for token in llm.model.tokenize(i.encode("utf-8"), add_bos=False)
     }
-    #print(f"TRIM_TOK IN {riddance}")
+    print(f"TRIM_TOK IN {riddance}")
     # left trimming
     while tkns.size >= 1 and tkns[0] in riddance:
-        #print(f"**LEFT TRIMMING /{tkns[0]}/")
+        print(f"**LEFT TRIMMING /{tkns[0]}/")
         tkns = tkns[1:]
     # right trimming
     while tkns.size >= 1 and tkns[-1] in riddance:
-        #print(f"**RIGHT TRIMMING /{tkns[-1]}/")
+        print(f"**RIGHT TRIMMING /{tkns[-1]}/")
         tkns = tkns[:-1]
     return tkns
 
@@ -536,10 +539,12 @@ def fancy_tok_typing(tkns):
     )
     tkns = trim_tok(tkns)
     total = len(tkns)
+    print(f"FANCY_TOK TOKNS=/{llm.decode(tkns)}/")
     
     # CAREFUL TKNS HARD-ENCODED
     #nl_ind = np.where(tkns == 201)[0]
-    nl_ind = np.where(tkns == 13)[0]
+    #nl_ind = np.where(tkns == 13)[0] # for mistral-v0.1
+    nl_ind = np.where(tkns == 781)[0] # for mistral-v0.3
 
     if nl_ind.size == 0:  # no newline separating char from msg
         nl_ind = 1
