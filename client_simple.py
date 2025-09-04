@@ -124,11 +124,6 @@ def send_three_dots():
         {"character": "", "message": "(...)",}
     )
 
-
-def send_ind():
-    sio.emit("bot confirms choice", {"id": BOT_ID, "choice": BATCH_MSG_IND,})
-
-
 def send_batch(data):
     sio.emit("chat batch", {"id": BOT_ID, **data,})
 

@@ -1,23 +1,25 @@
-from print_utils import print_underlined
-from print_utils import print_config
-from print_utils import pprint
-from base64 import b64encode
-from functools import partial
-from print_utils import term
-from threading import Lock
-#from gpt import Model
-from llama_cpp import Llama
-import numpy as np
-import traceback
-import textwrap
 import argparse
-import socketio
-import blessed
+import os
 import random
 import string
-import regex
-import time
 import sys
+import time
+import traceback
+from base64 import b64encode
+from functools import partial
+from threading import Lock
+
+import numpy as np
+import regex
+import socketio
+# from gpt import Model
+from llama_cpp import Llama
+
+from print_utils import pprint
+from print_utils import print_config
+from print_utils import term
+
+BOT_TOKEN=os.getenv("BOT_TOKEN")
 
 # numpy cosmetics
 np.set_printoptions(formatter={"all": lambda x: f"{str(x):>{5}}"})
@@ -1565,7 +1567,7 @@ def generate():
 
 @sio.event
 def connect():
-    sio.emit("new bot", {"user": args.server_name, "id": BOT_ID})
+    sio.emit("new bot", {"user": args.server_name, "id": BOT_ID, "token": BOT_TOKEN})
     # pprint(f"connecting to: {sio.connection_url}", sep="=")
     pprint(f"{args.server_name} established connection", sep="=", sep_aft="=")
     # if args.mode == "autonomous":
