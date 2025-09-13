@@ -94,7 +94,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--temperature", type=float, default=0.79, help="Temperature when sampling.",
+    "--temperature", type=float, default=0.9, help="Temperature when sampling.",
 )
 
 parser.add_argument(
@@ -119,7 +119,7 @@ parser.add_argument(
 parser.add_argument(
     "--tempo",
     type=float,
-    default=0.1,
+    default=0.3,
     help="Length of pause for each step of interactive print loop, in ms.",
 )
 
@@ -281,14 +281,14 @@ class SlidingWindowLLM:
         # vérifie le vocab
         #print("**** <|s|> token ID:", self.model.tokenizer.get_vocab().get("<|s|>"))
         #print("**** <|e|> token ID:", self.model.tokenizer.get_vocab().get("<|e|>"))
-        
+
     def generate(self, prompt_tokens, max_tokens=170):
         """
         Génère du texte en conservant un contexte glissant.
 
         :param prompt: Prompt d'entrée, avec le contexte, déjà tokenisé
         :param max_tokens: Nombre maximal de tokens à générer
-        :return: 
+        :return:
         """
         # Tokeniser le prompt (inutile: le prompt est déjà tokenisé
         #prompt_tokens = self.model.tokenize(prompt.encode("utf-8"))
@@ -318,7 +318,7 @@ class SlidingWindowLLM:
         more_generated_text = generated_text
         while not more_generated_text.endswith("<|e|>"):
             # le modèle n'a pas généré de balise de fin
-            
+
             # tokeniser la réponse générée précédemment et l'ajouter au contexte local
             more_generated_tokens = self.model.tokenize(more_generated_text.encode("utf-8"), add_bos=False)
             pprint(f"(generated - step: more_generated_tokens = {more_generated_tokens})")
@@ -367,7 +367,7 @@ class SlidingWindowLLM:
         generated_tokens = self.model.tokenize(generated_text.encode("utf-8"), add_bos=False)
         #self.context_tokens.extend(generated_tokens)
         response_np = np.concatenate((prompt_tokens, np.array(generated_tokens, dtype=np.int32)))
-        
+
 
         # Vérifier encore une fois la taille du contexte
         #if len(self.context_tokens) > self.max_context_size:
@@ -375,7 +375,8 @@ class SlidingWindowLLM:
             #print(f"**CUT CONTEXT** NEW CONTEXT={self.context_tokens}")
 
 		# TO DO: calculate perplexities
-        perplexities = [0.7]
+        #perplexities = [0.7]
+        perplexities = [np.random.rand()]
 
         # TO DO: batch generation
         batch_results = []
@@ -389,7 +390,7 @@ class SlidingWindowLLM:
         }
     def decode(self, s):
         """
-        Decode an array (or a batch) of machine-readable subwords into an array 
+        Decode an array (or a batch) of machine-readable subwords into an array
         of string(s).
         """
         if isinstance(s[0], (int, np.integer)):
@@ -540,7 +541,7 @@ def fancy_tok_typing(tkns):
     tkns = trim_tok(tkns)
     total = len(tkns)
     print(f"FANCY_TOK TOKNS=/{llm.decode(tkns)}/")
-    
+
     # CAREFUL TKNS HARD-ENCODED
     #nl_ind = np.where(tkns == 201)[0]
     #nl_ind = np.where(tkns == 13)[0] # for mistral-v0.1
@@ -909,7 +910,7 @@ def process_received_messages():
 
     global RECEIVED_MSGS
     global TKNS
- 
+
     if RECEIVED_MSGS.size > SEP_TKNS_LEN:
         pprint("(process received messages: append RECEIVED_MSGS to TKNS)", sp_bf=True, sp_aft=True)
         # pprint(le_model.decode(RECEIVED_MSGS), sp_aft=True)
@@ -1313,7 +1314,7 @@ def generate_new():
         #     sp_bf=True,
         #     sp_aft=True,
         # )
-        
+
         #data = le_model.gen_avoiding(
         #    prefix=[TKNS] * args.batch_size,
         #    avoiding=le_model.encode("<|e|>")[0],
@@ -1366,7 +1367,7 @@ def generate_new():
         pprint(f"(generate: temperature={args.temperature}, top_p={args.top_p}, top_k={args.top_k})")
         data_gen = llm.generate(TKNS)
         #print(f"GENERATION : {response}")
-        
+
         # generator logic to extract intermediate results
         while True:
             result = next(data_gen)
@@ -1389,7 +1390,7 @@ def generate_new():
     #print(f"DATA AFTER GENERATION, BEFORE TRIM_TOKENS -1- =/{data}/")
     #test = llm.model.detokenize(data["tokens"][0].tolist()).decode("utf-8")
     #print(f"DATA AFTER GENERATION, BEFORE TRIM_TOKENS -1- (TEXT ONLY)=/{test}/")
-    
+
     # trim token extract what has been generated in generated (text)
     generated, data["trimmed"] = trim_tokens(
         data["tokens"], end_pref, end_pref_after_injections
@@ -1398,8 +1399,8 @@ def generate_new():
     if RESETTING:
         return reset_gen()
 
-    #print(f"AFTER TRIM_TOKENS -1-, GENERATED=/{generated}/\nAFTER TRIM_TOKENS -1-, DATA=/{data}/")
     chars, messages = extract_chars_msgs(generated, data)
+    print(f"AFTER EXTRACT_CHARS_MSGS, CHARS=/{chars}/ MESSAGES=/{messages}/ PERPLEXITIES={data["perplexities"].tolist()}")
 
     if RESETTING:
         return reset_gen()
