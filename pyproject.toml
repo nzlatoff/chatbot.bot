@@ -6,9 +6,9 @@ authors = ["nz"]
 license = "GPL"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.10"
 python-socketio = {version = "5.13.0", extras = ["client"]}
-python-engineio = "4.11.2"
+python-engineio = "==4.11.2"
 blessed = "^1.20.0"
 regex = "^2024.11.6"
 requests = "^2.32.3"
