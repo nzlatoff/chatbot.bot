@@ -20,6 +20,7 @@ from print_utils import print_config
 from print_utils import term
 
 BOT_TOKEN=os.getenv("BOT_TOKEN")
+CHATBOT_INTERFACE_HOST=os.getenv("CHATBOT_HOST")
 
 # numpy cosmetics
 np.set_printoptions(formatter={"all": lambda x: f"{str(x):>{5}}"})
@@ -1929,6 +1930,6 @@ if args.local:
     sio.connect(url)
 else:
     user_pass = b64encode(b"guest:F89r$Q!Xw&HX").decode("ascii")
-    url = "https://chatbot.manufacture-recherche.ch"
+    url = CHATBOT_INTERFACE_HOST
     sio.connect(url, {"Authorization": "Basic %s" % user_pass})
 sio.wait()

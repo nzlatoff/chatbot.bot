@@ -45,6 +45,7 @@ sio = socketio.Client(logger=False, reconnection_delay_max=50)
 BOT_ID = f"bot-{''.join([random.choice(string.ascii_letters + string.digits) for _ in range(23)])}"
 load_dotenv()
 BOT_TOKEN=os.getenv("BOT_TOKEN")
+CHATBOT_INTERFACE_HOST=os.getenv("CHATBOT_HOST")
 print_config(args)
 
 def fancy_typing(char, message):
@@ -146,6 +147,6 @@ if args.local:
     sio.connect(url)
 else:
     user_pass = b64encode(b"guest:F89r$Q!Xw&HX").decode("ascii")
-    url = "https://chatbot.manufacture-recherche.ch"
+    url = CHATBOT_INTERFACE_HOST
     sio.connect(url, {"Authorization": "Basic %s" % user_pass})
 sio.wait()
