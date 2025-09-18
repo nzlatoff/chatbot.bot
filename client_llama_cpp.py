@@ -18,6 +18,9 @@ from llama_cpp import Llama
 from print_utils import pprint
 from print_utils import print_config
 from print_utils import term
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BOT_TOKEN=os.getenv("BOT_TOKEN")
 CHATBOT_INTERFACE_HOST=os.getenv("CHATBOT_HOST")
