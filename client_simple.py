@@ -143,10 +143,7 @@ def send_direct_message(data):
 pprint = partial(pprint, fn=send_entrails)
 
 if args.local:
-    url = "http://localhost:5100"
-    sio.connect(url)
+    sio.connect("http://localhost:5100")
 else:
-    user_pass = b64encode(b"guest:F89r$Q!Xw&HX").decode("ascii")
-    url = CHATBOT_INTERFACE_HOST
-    sio.connect(url, {"Authorization": "Basic %s" % user_pass})
+    sio.connect(CHATBOT_INTERFACE_HOST)
 sio.wait()

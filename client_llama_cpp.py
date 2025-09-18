@@ -21,7 +21,6 @@ from print_utils import term
 
 BOT_TOKEN=os.getenv("BOT_TOKEN")
 CHATBOT_INTERFACE_HOST=os.getenv("CHATBOT_HOST")
-
 # numpy cosmetics
 np.set_printoptions(formatter={"all": lambda x: f"{str(x):>{5}}"})
 
@@ -1926,9 +1925,8 @@ def send_direct_message(data):
 pprint = partial(pprint, fn=send_entrails)
 
 if args.local:
-    url = "http://localhost:5100"
-    sio.connect(url)
+    sio.connect("http://localhost:5100")
 else:
-    url = CHATBOT_INTERFACE_HOST
-    sio.connect(url)
+    print(f"Connect to {CHATBOT_INTERFACE_HOST}")
+    sio.connect(CHATBOT_INTERFACE_HOST)
 sio.wait()
