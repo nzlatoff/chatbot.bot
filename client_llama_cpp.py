@@ -1929,7 +1929,6 @@ if args.local:
     url = "http://localhost:5100"
     sio.connect(url)
 else:
-    user_pass = b64encode(b"guest:F89r$Q!Xw&HX").decode("ascii")
     url = CHATBOT_INTERFACE_HOST
-    sio.connect(url, {"Authorization": "Basic %s" % user_pass})
+    sio.connect(url)
 sio.wait()
