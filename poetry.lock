@@ -285,7 +285,7 @@ h11 = ">=0.9.0,<1"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "f40580bbcbaac2f361c3342c2c4bb114261be31ecfe1111b893bbb2fe2ed4f22"
+content-hash = "e9603f0af3325922fe64b3bea1f645d9946e9477c7655263a53efde9d57ba4b4"
 
 [metadata.files]
 ansicon = []
