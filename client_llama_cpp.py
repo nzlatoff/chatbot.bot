@@ -1405,7 +1405,7 @@ def generate_new():
         return reset_gen()
 
     chars, messages = extract_chars_msgs(generated, data)
-    print(f"AFTER EXTRACT_CHARS_MSGS, CHARS=/{chars}/ MESSAGES=/{messages}/ PERPLEXITIES={data["perplexities"].tolist()}")
+    print(f"AFTER EXTRACT_CHARS_MSGS, CHARS=/{chars}/ MESSAGES=/{messages}/ PERPLEXITIES={data['perplexities'].tolist()}")
 
     if RESETTING:
         return reset_gen()
