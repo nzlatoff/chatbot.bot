@@ -12,7 +12,7 @@ python-engineio = "==4.11.2"
 blessed = "^1.20.0"
 regex = "^2024.11.6"
 requests = "^2.32.3"
-llama-cpp-python = {extras = ["cuda"], version = "^0.3.8"}
+llama-cpp-python = {extras = ["cuda"], version = "==0.3.8"}
 dotenv = "^0.9.9"
 
 [tool.poetry.dev-dependencies]
