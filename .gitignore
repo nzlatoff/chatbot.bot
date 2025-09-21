@@ -14,3 +14,4 @@ models
 results
 checkpoint
 .venv
+.DS_Store
