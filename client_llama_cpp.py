@@ -12,6 +12,7 @@ from threading import Lock
 import numpy as np
 import regex
 import socketio
+from socketio.exceptions import BadNamespaceError
 # from gpt import Model
 from llama_cpp import Llama
 
@@ -956,16 +957,9 @@ def process_received_messages():
 
 def try_catch_wrapper(fn):
 
-    global BATCH_MSG_IND
-    global IS_GENERATING
-
-    try:
-        if not fn():
-            return False
-    except Exception as e:
-        pprint(
-            f"0.0.0.P.S. in function {fn.__name__}:", sp_bf=True, sep="=", sp_aft=True,
-        )
+    def print_exc():
+        global BATCH_MSG_IND
+        global IS_GENERATING
         exc_type, exc_value, exc_traceback = sys.exc_info()
         traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
         print(exc_type, exc_type == "ValueError")
@@ -974,6 +968,17 @@ def try_catch_wrapper(fn):
             BATCH_MSG_IND = None
             IS_GENERATING = False
         return False
+    try:
+        if not fn():
+            return False
+    except BadNamespaceError:
+        return print_exc()
+    except Exception as e:
+        if not e.__class__.__module__.startswith(socketio.__name__):
+            pprint(
+                f"0.0.0.P.S. in function {fn.__name__}:", sp_bf=True, sep="=", sp_aft=True,
+            )
+        return print_exc()
     return True
 
 
