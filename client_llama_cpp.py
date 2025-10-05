@@ -300,7 +300,11 @@ class SlidingWindowLLM:
         context_text = self.model.detokenize(self.context_tokens).decode("utf-8", errors="ignore")
 
         # Génération avec du texte brut
-        outputs = [self.model.create_completion(
+        batch_results = []
+        perplexities = []
+        finish_reasons = []
+
+        """outputs = [self.model.create_completion(
             context_text,
             seed = -1,
             max_tokens=max_tokens,
@@ -310,8 +314,32 @@ class SlidingWindowLLM:
             top_p=self.top_p,
             top_k=self.top_k
         ) for _ in range(batch_size)]
+        for i, output in enumerate(outputs):"""
+        for i in range(batch_size):
+            generated_text = ""
+            pprint(f"(generated - batch {i+1} - step: generated_tokens = [ ")
+            for output in self.model.create_completion(
+                context_text,
+                seed = -1,
+                max_tokens=max_tokens,
+                stop=["<|e|>", " <|e|>"],
+                repeat_penalty = 1.2,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                top_k=self.top_k,
+                stream=True
+                ):
+                    chunk = output["choices"][0]["text"]
+                    generated_text += chunk
+                    chunk_tokens = self.model.tokenize(chunk.encode("utf-8"), add_bos=False)
+                    [send_entrails(f"{token} ", no_cr=True) for token in chunk_tokens]
+                    char = args.character+args.first_words
+                    send_typing({"character": char, "message": generated_text,})
 
-        """ outputs is a list of dict, each containing:
+                    time.sleep(args.tempo)
+            send_entrails(f" ]", no_cr=True)
+
+            """ output is a dict, containing:
         {
             "id": "cmpl-1234567890",   # identifiant unique de complétion
             "object": "text_completion",
@@ -332,23 +360,19 @@ class SlidingWindowLLM:
             }
         }"""
 
-        batch_results = []
-        perplexities = []
-        finish_reasons = []
-        for i, output in enumerate(outputs):
-            generated_text = output["choices"][0]["text"]
-            # Tokeniser la réponse générée
+            #generated_text = output["choices"][0]["text"]
+            # Tokeniser la réponse générée: peut être différent des tokens affichés étape par étape
             generated_tokens = self.model.tokenize(generated_text.encode("utf-8"), add_bos=False)
             finish_reasons.append(output["choices"][0]["finish_reason"])
 
-            pprint(f"(generated - batch {i} - step: generated_tokens = {generated_tokens})")
-            pprint(f"(generated - batch {i} - step: ... in other words, generated_text=/{generated_text.strip()} (finish reason:{finish_reasons[-1]})/)")
+            #pprint(f"(generated - batch {i+1} - step: generated_tokens = {generated_tokens})")
+            pprint(f"(generated - batch {i+1} - step: ... in other words, generated_text=/{generated_text.strip()}/ (finish reason:{finish_reasons[-1]}))")
 
             # Test: being sure that <|e|> is generated
             more_generated_text_previous_step = ""
             while finish_reasons[-1] == "length":
                 # le modèle n'a pas généré de balise de fin
-                pprint(f"(generated - batch {i} - step: no end mark generated, generate again {max_tokens} tokens max)")
+                pprint(f"(generated - batch {i+1} - step: no end mark generated, generate again {max_tokens} tokens max)")
 
                 # Ajouter la réponse tokenisée générée précédemment au contexte local
                 self.context_tokens.extend(generated_tokens)
@@ -356,29 +380,44 @@ class SlidingWindowLLM:
                 # Vérifie la taille du contexte local et coupe éventuellement
                 if len(self.context_tokens) > self.max_context_size:
                     self.context_tokens = self.context_tokens[-self.max_context_size:]
-                    pprint(f"(generate - batch {i} - step: REACHED THRESHOLD LENGTH, TRIMMING CONTEXT LOCALLY (TKNS are unchanged) context_tokens is currently /{self.decode(self.context_tokens).strip()}/ (size: {len(self.context_tokens)}))", sep="-", sp_bf=True, sep_aft="-", sp_aft=True)
+                    pprint(f"(generate - batch {i+1} - step: REACHED THRESHOLD LENGTH, TRIMMING CONTEXT LOCALLY (TKNS are unchanged) context_tokens is currently /{self.decode(self.context_tokens).strip()}/ (size: {len(self.context_tokens)}))", sep="-", sp_bf=True, sep_aft="-", sp_aft=True)
 
                 # transforme le contexte en texte
                 context_text = self.model.detokenize(self.context_tokens).decode("utf_8", errors="ignore")
                 print(f"**GENERATE** context=/{context_text}/")
 
                 # génère une suite
-                more_outputs = self.model(
+                more_generated_text = ""
+                pprint(f"(generated - batch {i+1} - step: generated_tokens = [ ")
+                for more_output in self.model.create_completion(
                     context_text,
                     max_tokens = max_tokens,
-                    stop = ["<|e|>"],
-                    temperature = self.temperature,
-                    top_p = self.top_p,
-                    top_k = self.top_k)
+                    stop = ["<|e|>", " <|e|>"],
+                    repeat_penalty = 1.2,
+                    temperature=self.temperature,
+                    top_p=self.top_p,
+                    top_k=self.top_k,
+                    stream=True):
 
-                more_generated_text = more_outputs["choices"][0]["text"]
-                # Tokeniser la réponse générée
+                    more_chunk = more_output["choices"][0]["text"]
+                    more_generated_text += more_chunk
+                    more_chunk_tokens = self.model.tokenize(more_chunk.encode("utf-8"), add_bos=False)
+                    [send_entrails(f"{token} ", no_cr=True) for token in more_chunk_tokens]
+                    send_typing({"character": char, "message": generated_text+more_generated_text})
+
+                    time.sleep(args.tempo)
+                send_entrails(f" ]", no_cr=True)
+
+                
+                
+                #more_generated_text = more_outputs["choices"][0]["text"]
+                # Tokeniser la réponse générée: peut être différent des tokens affichés étape par étape
                 generated_tokens = self.model.tokenize(more_generated_text.encode("utf-8"), add_bos=False)
                 # update de finish_reason
-                finish_reasons[i] = more_outputs["choices"][0]["finish_reason"]
+                finish_reasons[i] = more_output["choices"][0]["finish_reason"]
 
-                pprint(f"(generated - batch {i} - step: more_generated_tokens = {generated_tokens})")
-                pprint(f"(generated - batch {i} - step: ... in other words, more_generated_text=/{more_generated_text.strip()} (finish reason:{finish_reasons[i]})/)")
+                #pprint(f"(generated - batch {i+1} - step: more_generated_tokens = {generated_tokens})")
+                pprint(f"(generated - batch {i+1} - step: ... in other words, more_generated_text=/{more_generated_text.strip()}/ (finish reason:{finish_reasons[i]}))")
 
                 if more_generated_text == more_generated_text_previous_step or len(generated_text) > args.limit_prefix:
                     pprint(f"(generate - step: generated text may be looping (length of generated_text: {len(generated_text)}), break and continue)")
@@ -1410,7 +1449,7 @@ def generate_new():
     #test = llm.model.detokenize(data["tokens"][0].tolist()).decode("utf-8")
     #print(f"DATA AFTER GENERATION, BEFORE TRIM_TOKENS -1- (TEXT ONLY)=/{test}/")
 
-    # trim token extract what has been generated in generated (text)
+    # trim token extract the whole lines of CHARACTER from generated (text)
     generated, data["trimmed"] = trim_tokens(
         data["tokens"], end_pref, end_pref_after_injections
     )
@@ -1457,17 +1496,15 @@ def generate_new():
 
     send_ind()
 
-    send_direct_message(
-        {"character": char, "message": message, "user": args.server_name, "id": BOT_ID}
-    )
-    print(f"SEND_DIRECT_MESSAGE CHARACTER=/{char}/\nSEND_DIRECT_MESSAGE MESSAGE=/{message}/")
+    # send message in direct mode (eg in /bots, mode `direct`) that is without gradual display
+    send_direct_message({"character": char, "message": message, "user": args.server_name, "id": BOT_ID})
 
     # send writing with variable speed
-    if not fancy_tok_typing(data["trimmed"][BATCH_MSG_IND]):
-        return reset_gen()
+    #if not fancy_tok_typing(data["trimmed"][BATCH_MSG_IND]):
+    #    return reset_gen()
 
+    # save chat message to database
     send_message({"character": char, "message": message, "user": args.server_name})
-    print(f"SEND_MESSAGE CHARACTER=/{char}/\nSEND_MESSAGE MESSAGE=/{message}/")
 
     if RESETTING:
         return reset_gen()
