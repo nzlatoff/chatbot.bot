@@ -287,7 +287,7 @@ class SlidingWindowLLM:
         #print("**** <|s|> token ID:", self.model.tokenizer.get_vocab().get("<|s|>"))
         #print("**** <|e|> token ID:", self.model.tokenizer.get_vocab().get("<|e|>"))
 
-    def generate(self, prompt_tokens, max_tokens=170):
+    def generate(self, prompt_tokens, batch_size, max_tokens=170):
         """
         Génère du texte en conservant un contexte glissant.
 
@@ -305,7 +305,7 @@ class SlidingWindowLLM:
         context_text = self.model.detokenize(self.context_tokens).decode("utf-8", errors="ignore")
 
         # Génération avec du texte brut
-        output = self.model(
+        outputs = [self.model.create_completion(
             context_text,
             seed = -1,
             max_tokens=max_tokens,
@@ -314,80 +314,99 @@ class SlidingWindowLLM:
             temperature=self.temperature,
             top_p=self.top_p,
             top_k=self.top_k
-        )
+        ) for _ in range(batch_size)]
 
-        # Extraire le texte généré
-        generated_text = output["choices"][0]["text"]
+        """ outputs is a list of dict, each containing:
+        {
+            "id": "cmpl-1234567890",   # identifiant unique de complétion
+            "object": "text_completion",
+            "created": 1736820000,     # timestamp (epoch seconds)
+            "model": "llama-model.gguf",  # chemin ou nom du modèle
+            "choices": [
+                {
+                    "text": "Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune",
+                    "index": 0,
+                    "logprobs": None,          # peut contenir les logprobs si demandé
+                    "finish_reason": "stop",   # "stop", "length", ou "eos_token"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 12,   # nb de tokens en entrée
+                "completion_tokens": 15, # nb de tokens générés
+                "total_tokens": 27
+            }
+        }"""
 
-        # Test: being sure that <|e|> is generated
-        more_generated_text = generated_text
-        while not more_generated_text.endswith("<|e|>"):
-            # le modèle n'a pas généré de balise de fin
-
-            # tokeniser la réponse générée précédemment et l'ajouter au contexte local
-            more_generated_tokens = self.model.tokenize(more_generated_text.encode("utf-8"), add_bos=False)
-            pprint(f"(generated - step: more_generated_tokens = {more_generated_tokens})")
-            pprint(f"(generated - step: ... in other words, more_generated_text=/{more_generated_text.strip()}/)")
-            pprint(f"(generated - step: no end mark generated, generate again {max_tokens} tokens max)")
-            self.context_tokens.extend(more_generated_tokens)
-            #re-initialise more_generated_text pour cette itération
-            more_generated_text_previous_step = ""
-            more_generated_text_previous_step = more_generated_text
-            more_generated_text = ""
-
-            # Vérifie la taille du contexte et coupe éventuellement
-            if len(self.context_tokens) > self.max_context_size:
-                self.context_tokens = self.context_tokens[-self.max_context_size:]
-                pprint(f"(generate - step: REACHED THRESHOLD LENGTH, TRIMMING CONTEXT LOCALLY (TKNS are unchanged) context_tokens is currently /{self.decode(self.context_tokens).strip()}/ (size: {len(self.context_tokens)}))", sep="-", sp_bf=True, sep_aft="-", sp_aft=True)
-
-            # transforme le contexte en texte
-            context_text = self.model.detokenize(self.context_tokens).decode("utf_8", errors="ignore")
-
-            print(f"**GENERATE** context=/{context_text}/")
-            # génère une suite
-            more_outputs = self.model(
-                context_text,
-                max_tokens = max_tokens,
-                stop = ["<|e|>"],
-                temperature = self.temperature,
-                top_p = self.top_p,
-                top_k = self.top_k)
-
-            # incrémente la suite
-            more_generated_text = more_outputs["choices"][0]["text"]
-            generated_text += more_generated_text
-            if len(more_generated_text) == 0:
-                pprint(f"(generate - step: nothing generated this time, this means end mark is ok, break and continue)")
-                break
-            if more_generated_text == more_generated_text_previous_step or len(generated_text) > args.limit_prefix:
-                pprint(f"(generate - step: generated text may be looping more_generated_text=/{more_generated_text}/(length of generated_text: {len(generated_text)}), break and continue)")
-                break
-
-
-        # Ajoute la balise start pour cohérence avec ancien code
-        generated_text += "<|e|>\n<|s|>"
-        #print(f"**GENERATE TEXTE GENERE=/{generated_text}/")
-
-        # Tokeniser la réponse générée et l'ajouter au contexte reçu
-        generated_tokens = self.model.tokenize(generated_text.encode("utf-8"), add_bos=False)
-        #self.context_tokens.extend(generated_tokens)
-        response_np = np.concatenate((prompt_tokens, np.array(generated_tokens, dtype=np.int32)))
-
-
-        # Vérifier encore une fois la taille du contexte
-        #if len(self.context_tokens) > self.max_context_size:
-            #self.context_tokens = self.context_tokens[-self.max_context_size:]
-            #print(f"**CUT CONTEXT** NEW CONTEXT={self.context_tokens}")
-
-		# TO DO: calculate perplexities
-        #perplexities = [0.7]
-        perplexities = [np.random.rand()]
-
-        # TO DO: batch generation
         batch_results = []
-        #context_tokens_np = np.array(self.context_tokens, dtype=np.int32)
-        #batch_results.append(context_tokens_np)
-        batch_results.append(response_np)
+        perplexities = []
+        finish_reasons = []
+        for i, output in enumerate(outputs):
+            generated_text = output["choices"][0]["text"]
+            # Tokeniser la réponse générée
+            generated_tokens = self.model.tokenize(generated_text.encode("utf-8"), add_bos=False)
+            finish_reasons.append(output["choices"][0]["finish_reason"])
+
+            pprint(f"(generated - batch {i} - step: generated_tokens = {generated_tokens})")
+            pprint(f"(generated - batch {i} - step: ... in other words, generated_text=/{generated_text.strip()} (finish reason:{finish_reasons[-1]})/)")
+
+            # Test: being sure that <|e|> is generated
+            more_generated_text_previous_step = ""
+            while finish_reasons[-1] == "length":
+                # le modèle n'a pas généré de balise de fin
+                pprint(f"(generated - batch {i} - step: no end mark generated, generate again {max_tokens} tokens max)")
+
+                # Ajouter la réponse tokenisée générée précédemment au contexte local
+                self.context_tokens.extend(generated_tokens)
+
+                # Vérifie la taille du contexte local et coupe éventuellement
+                if len(self.context_tokens) > self.max_context_size:
+                    self.context_tokens = self.context_tokens[-self.max_context_size:]
+                    pprint(f"(generate - batch {i} - step: REACHED THRESHOLD LENGTH, TRIMMING CONTEXT LOCALLY (TKNS are unchanged) context_tokens is currently /{self.decode(self.context_tokens).strip()}/ (size: {len(self.context_tokens)}))", sep="-", sp_bf=True, sep_aft="-", sp_aft=True)
+
+                # transforme le contexte en texte
+                context_text = self.model.detokenize(self.context_tokens).decode("utf_8", errors="ignore")
+                print(f"**GENERATE** context=/{context_text}/")
+
+                # génère une suite
+                more_outputs = self.model(
+                    context_text,
+                    max_tokens = max_tokens,
+                    stop = ["<|e|>"],
+                    temperature = self.temperature,
+                    top_p = self.top_p,
+                    top_k = self.top_k)
+
+                more_generated_text = more_outputs["choices"][0]["text"]
+                # Tokeniser la réponse générée
+                generated_tokens = self.model.tokenize(more_generated_text.encode("utf-8"), add_bos=False)
+                # update de finish_reason
+                finish_reasons[i] = more_outputs["choices"][0]["finish_reason"]
+
+                pprint(f"(generated - batch {i} - step: more_generated_tokens = {generated_tokens})")
+                pprint(f"(generated - batch {i} - step: ... in other words, more_generated_text=/{more_generated_text.strip()} (finish reason:{finish_reasons[i]})/)")
+
+                if more_generated_text == more_generated_text_previous_step or len(generated_text) > args.limit_prefix:
+                    pprint(f"(generate - step: generated text may be looping (length of generated_text: {len(generated_text)}), break and continue)")
+                    break
+                # update de generated_text qui contient TOUT ce qui a été généré
+                generated_text += more_generated_text
+                # NB: generated_tokens contient UNIQUEMENT ce qui vient d'être généré
+                #     generated_tokens sera agrégé au contexte à l'itération suivante
+
+
+            # Ajoute la balise start pour cohérence avec ancien code
+            generated_text += "<|e|>\n<|s|>"
+
+
+            # Tokeniser TOUTE la réponse générée pour la retourner
+            generated_tokens = self.model.tokenize(generated_text.encode("utf-8"), add_bos=False)
+            response_np = np.concatenate((prompt_tokens, np.array(generated_tokens, dtype=np.int32)))
+
+            batch_results.append(response_np)
+            perplexities.append(np.random.rand())
+
+            # Ré-initialise le context local aux tokens TKNS pour les batchs suivants
+            self.context_tokens = prompt_tokens.tolist()
 
         yield {
                 "tokens": batch_results,
@@ -1370,14 +1389,14 @@ def generate_new():
         #    pprint=True,
         #)
         pprint(f"(generate: temperature={args.temperature}, top_p={args.top_p}, top_k={args.top_k})")
-        data_gen = llm.generate(TKNS)
+        data_gen = llm.generate(TKNS, args.batch_size)
         #print(f"GENERATION : {response}")
 
         # generator logic to extract intermediate results
         while True:
             result = next(data_gen)
             if isinstance(result, str):
-                pprint(result, term_trim=term.width, pre=True)
+                pprint(f"{result}", term_trim=term.width, pre=True)
             else:
                 data = result
                 break
@@ -1825,7 +1844,7 @@ def set_config(data):
                 sp_bf=True,
                 sep="=",
             )
-            le_model = Model(
+            """le_model = Model(
                 model_name=args.model,
                 run_name=args.run_name,
                 device=args.device,
@@ -1833,7 +1852,7 @@ def set_config(data):
                 special_tokens=["<|endoftext|>"]
                 if (args.mode == "legacy")
                 else ["<|s|>", "<|e|>", "<|endoftext|>"],
-            )
+            )"""
             # reset_session()
             pprint(
                 f"Ya! Batch size changed to {args.batch_size}.",
