@@ -4,6 +4,8 @@
 # python
 __pycache__
 .ipynb_checkpoints
+.idea
+.env
 
 tags
 
@@ -12,3 +14,4 @@ models
 results
 checkpoint
 .venv
+.DS_Store

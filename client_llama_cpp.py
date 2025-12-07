@@ -1,24 +1,31 @@
-from print_utils import print_underlined
-from print_utils import print_config
-from print_utils import pprint
+import argparse
+import os
+import random
+import ssl
+import string
+import sys
+import time
+import traceback
 from base64 import b64encode
 from functools import partial
-from print_utils import term
 from threading import Lock
-#from gpt import Model
-from llama_cpp import Llama
-import numpy as np
-import traceback
-import textwrap
-import argparse
-import socketio
-import blessed
-import random
-import string
-import regex
-import time
-import sys
 
+import numpy as np
+import regex
+import socketio
+from socketio.exceptions import BadNamespaceError
+# from gpt import Model
+from llama_cpp import Llama
+
+from print_utils import pprint
+from print_utils import print_config
+from print_utils import term
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BOT_TOKEN=os.getenv("BOT_TOKEN")
+CHATBOT_INTERFACE_HOST=os.getenv("CHATBOT_HOST")
 # numpy cosmetics
 np.set_printoptions(formatter={"all": lambda x: f"{str(x):>{5}}"})
 
@@ -243,7 +250,7 @@ args = parser.parse_args()
 # ----------------------------------------
 # socket & model init
 
-sio = socketio.Client(logger=False, reconnection_delay_max=50)
+sio = socketio.Client(logger=False, reconnection_delay_max=50, ssl_verify=False)
 
 LeLocle = Lock()
 
@@ -952,16 +959,9 @@ def process_received_messages():
 
 def try_catch_wrapper(fn):
 
-    global BATCH_MSG_IND
-    global IS_GENERATING
-
-    try:
-        if not fn():
-            return False
-    except Exception as e:
-        pprint(
-            f"0.0.0.P.S. in function {fn.__name__}:", sp_bf=True, sep="=", sp_aft=True,
-        )
+    def print_exc():
+        global BATCH_MSG_IND
+        global IS_GENERATING
         exc_type, exc_value, exc_traceback = sys.exc_info()
         traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stdout)
         print(exc_type, exc_type == "ValueError")
@@ -970,6 +970,17 @@ def try_catch_wrapper(fn):
             BATCH_MSG_IND = None
             IS_GENERATING = False
         return False
+    try:
+        if not fn():
+            return False
+    except BadNamespaceError:
+        return print_exc()
+    except Exception as e:
+        if not e.__class__.__module__.startswith(socketio.__name__):
+            pprint(
+                f"0.0.0.P.S. in function {fn.__name__}:", sp_bf=True, sep="=", sp_aft=True,
+            )
+        return print_exc()
     return True
 
 
@@ -1420,6 +1431,8 @@ def generate_new():
         return reset_gen()
 
     chars, messages = extract_chars_msgs(generated, data)
+    #print(f"AFTER EXTRACT_CHARS_MSGS, CHARS=/{chars}/ MESSAGES=/{messages}/ PERPLEXITIES={data['perplexities'].tolist()}")
+
 
     if RESETTING:
         return reset_gen()
@@ -1590,7 +1603,7 @@ def generate():
 
 @sio.event
 def connect():
-    sio.emit("new bot", {"user": args.server_name, "id": BOT_ID})
+    sio.emit("new bot", {"user": args.server_name, "id": BOT_ID, "token": BOT_TOKEN})
     # pprint(f"connecting to: {sio.connection_url}", sep="=")
     pprint(f"{args.server_name} established connection", sep="=", sep_aft="=")
     # if args.mode == "autonomous":
@@ -1948,10 +1961,8 @@ def send_direct_message(data):
 pprint = partial(pprint, fn=send_entrails)
 
 if args.local:
-    url = "http://localhost:5100"
-    sio.connect(url)
+    sio.connect("http://localhost:5100")
 else:
-    user_pass = b64encode(b"guest:F89r$Q!Xw&HX").decode("ascii")
-    url = "https://chatbot.gaspard-prod.ch"
-    sio.connect(url, {"Authorization": "Basic %s" % user_pass})
+    print(f"Connect to {CHATBOT_INTERFACE_HOST}")
+    sio.connect(CHATBOT_INTERFACE_HOST)
 sio.wait()
