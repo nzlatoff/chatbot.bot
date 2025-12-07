@@ -1431,10 +1431,8 @@ def generate_new():
         return reset_gen()
 
     chars, messages = extract_chars_msgs(generated, data)
-<<<<<<< HEAD
-    print(f"AFTER EXTRACT_CHARS_MSGS, CHARS=/{chars}/ MESSAGES=/{messages}/ PERPLEXITIES={data['perplexities'].tolist()}")
-=======
->>>>>>> master
+    #print(f"AFTER EXTRACT_CHARS_MSGS, CHARS=/{chars}/ MESSAGES=/{messages}/ PERPLEXITIES={data['perplexities'].tolist()}")
+
 
     if RESETTING:
         return reset_gen()
@@ -1965,12 +1963,6 @@ pprint = partial(pprint, fn=send_entrails)
 if args.local:
     sio.connect("http://localhost:5100")
 else:
-<<<<<<< HEAD
     print(f"Connect to {CHATBOT_INTERFACE_HOST}")
     sio.connect(CHATBOT_INTERFACE_HOST)
-=======
-    user_pass = b64encode(b"guest:F89r$Q!Xw&HX").decode("ascii")
-    url = "https://chatbot.gaspard-prod.ch"
-    sio.connect(url, {"Authorization": "Basic %s" % user_pass})
->>>>>>> master
 sio.wait()
