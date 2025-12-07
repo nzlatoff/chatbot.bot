@@ -1,7 +1,6 @@
 import argparse
 import os
 import random
-import ssl
 import string
 import sys
 import time
@@ -250,7 +249,7 @@ args = parser.parse_args()
 # ----------------------------------------
 # socket & model init
 
-sio = socketio.Client(logger=False, reconnection_delay_max=50, ssl_verify=False)
+sio = socketio.Client(logger=False, reconnection_delay_max=50)
 
 LeLocle = Lock()
 
