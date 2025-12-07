@@ -399,7 +399,7 @@ class SlidingWindowLLM:
             response_np = np.concatenate((prompt_tokens, np.array(generated_tokens, dtype=np.int32)))
 
             batch_results.append(response_np)
-            perplexities.append(np.random.rand())
+            perplexities.append([np.random.rand()])
 
             # Ré-initialise le context local aux tokens TKNS pour les batchs suivants
             self.context_tokens = prompt_tokens.tolist()
