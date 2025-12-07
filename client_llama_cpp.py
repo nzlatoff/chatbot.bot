@@ -302,7 +302,7 @@ class SlidingWindowLLM:
         # Génération avec du texte brut
         outputs = [self.model.create_completion(
             context_text,
-            seed = -1,
+            #seed = -1,
             max_tokens=max_tokens,
             stop=["<|e|>"],
             repeat_penalty = 1.2,
@@ -367,6 +367,7 @@ class SlidingWindowLLM:
                     context_text,
                     max_tokens = max_tokens,
                     stop = ["<|e|>"],
+                    repeat_penalty = 1.2,
                     temperature = self.temperature,
                     top_p = self.top_p,
                     top_k = self.top_k)
@@ -1419,7 +1420,6 @@ def generate_new():
         return reset_gen()
 
     chars, messages = extract_chars_msgs(generated, data)
-    print(f"AFTER EXTRACT_CHARS_MSGS, CHARS=/{chars}/ MESSAGES=/{messages}/ PERPLEXITIES={data["perplexities"].tolist()}")
 
     if RESETTING:
         return reset_gen()
@@ -1952,6 +1952,6 @@ if args.local:
     sio.connect(url)
 else:
     user_pass = b64encode(b"guest:F89r$Q!Xw&HX").decode("ascii")
-    url = "https://chatbot.manufacture-recherche.ch"
+    url = "https://chatbot.gaspard-prod.ch"
     sio.connect(url, {"Authorization": "Basic %s" % user_pass})
 sio.wait()
