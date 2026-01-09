@@ -678,7 +678,8 @@ def preprocess_prefix():
 
         if args.subtext:
             args.hidden_before_ch = args.subtext.strip()
-            hidden_before_encoded = le_model.encode(f"\n{args.subtext}")
+            #hidden_before_encoded = le_model.encode(f"\n{args.subtext}")
+            hidden_before_encoded = np.array(llm.model.tokenize(("\n"+args.subtext).encode("utf-8"), add_bos=False), dtype=np.int32)
             len_injections += len(hidden_before_encoded)
             with LeLocle:
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
@@ -710,7 +711,8 @@ def preprocess_prefix():
 
         if args.subtext:
             args.hidden_before_ch = args.subtext.strip()
-            hidden_before_encoded = le_model.encode(f"{args.subtext}\n")
+            #hidden_before_encoded = le_model.encode(f"{args.subtext}\n")
+            hidden_before_encoded = np.array(llm.model.tokenize((args.subtext+"\n").encode("utf-8"), add_bos=False), dtype=np.int32)
             len_injections += len(hidden_before_encoded)
             with LeLocle:
                 TKNS = np.concatenate((TKNS, hidden_before_encoded))
