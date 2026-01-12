@@ -125,7 +125,7 @@ parser.add_argument(
 parser.add_argument(
     "--tempo",
     type=float,
-    default=0.3,
+    default=0.1,
     help="Length of pause for each step of interactive print loop, in ms.",
 )
 
@@ -449,12 +449,11 @@ MESSAGES = []
 PREFIX = ""
 
 TKNS = np.array([], dtype=np.int32)
+TKNS_BCKP = np.array([], dtype=np.int32) # in case of batch skip 
 SEP_TKNS = np.array(llm.model.tokenize(SEPARATORS.encode("utf-8"), add_bos=False), dtype=np.int32)
 SEP_TKNS_LEN = SEP_TKNS.size
 
-# CAREFUL CHANGING RECEIVED_MSGS INIT FOR VERY FIRST INTERACTION
 RECEIVED_MSGS = np.array([], dtype=np.int32) # tokenization of received message
-#RECEIVED_MSGS = np.array(llm.model.tokenize(SEPARATORS.encode("utf-8"), add_bos=False), dtype=np.int32)
 BATCH_MSG_IND = None
 
 TKNS_LEN_THRESHOLD = args.limit_prefix
@@ -544,11 +543,11 @@ def trim_tok(tkns):
     print(f"TRIM_TOK IN {riddance}")
     # left trimming
     while tkns.size >= 1 and tkns[0] in riddance:
-        print(f"**LEFT TRIMMING /{tkns[0]}/")
+        #print(f"**LEFT TRIMMING /{tkns[0]}/")
         tkns = tkns[1:]
     # right trimming
     while tkns.size >= 1 and tkns[-1] in riddance:
-        print(f"**RIGHT TRIMMING /{tkns[-1]}/")
+        #print(f"**RIGHT TRIMMING /{tkns[-1]}/")
         tkns = tkns[:-1]
     return tkns
 
@@ -568,10 +567,18 @@ def fancy_tok_typing(tkns):
     total = len(tkns)
     print(f"FANCY_TOK TOKNS=/{llm.decode(tkns)}/")
 
-    # CAREFUL TKNS HARD-ENCODED
-    #nl_ind = np.where(tkns == 201)[0]
+    #nl_ind = np.where(tkns == 201)[0] # for gpt-2
     #nl_ind = np.where(tkns == 13)[0] # for mistral-v0.1
-    nl_ind = np.where(tkns == 781)[0] # for mistral-v0.3
+    #nl_ind = np.where(tkns == 781)[0] # for mistral-v0.3
+    # Try a kind of non-so-generic way to do that
+    nl_toks = np.array(llm.model.tokenize(("\n").encode("utf-8"), add_bos=False), dtype=tkns.dtype)
+    nl_len = int(nl_toks.size)
+    if nl_len == 1:
+        nl_ind = np.where(tkns == nl_toks.item())[0]
+    else:
+        # newline can be multiple tokens; Use the last one 
+        nl_ind = np.where(tkns == nl_toks[-1])[0]
+        print(f"nl_toks = /{nl_toks}/ Using the last one tokenID -> nl_ind = /{nl_ind}/")
 
     if nl_ind.size == 0:  # no newline separating char from msg
         nl_ind = 1
@@ -1315,6 +1322,7 @@ def generate_new():
     global BATCH_MSG_IND
     global RESETTING
     global TKNS
+    global TKNS_BCKP
     global DIRECT_INJECTIONS
 
     send_typing(
@@ -1329,7 +1337,10 @@ def generate_new():
     if RESETTING:
         return reset_gen()
 
-    tkns_bckp = TKNS  # bckp in case batch skipped
+    #print(f"--- GENERATE NEW --- TKNS = /{llm.decode(TKNS)}/")
+    TKNS_BCKP = TKNS  # bckp in case batch skipped
+    #print(f"--- GENERATE NEW AFTER BCKP --- TKNS_BCKP = /{llm.decode(TKNS_BCKP)}/")
+    #print(f"--- GENERATE NEW AFTER BCKP --- TKNS = /{llm.decode(TKNS)}/")
     end_pref_orig, end_pref, end_pref_after_injections = preprocess_prefix()
     #print(f"**GENERATE_NEW** TOKENS=/{TKNS}/")
     #print(f"**GENERATE_NEW** TOKENS(TEXTE)=/{llm.model.detokenize(TKNS.tolist()).decode('utf-8').strip()}/")
@@ -1455,7 +1466,8 @@ def generate_new():
     # batch skipped by master
     if BATCH_MSG_IND == -2:
         with LeLocle:
-            TKNS = tkns_bckp
+            TKNS = TKNS_BCKP
+            TKNS = np.concatenate((TKNS, SEP_TKNS))
             BATCH_MSG_IND = None
             IS_GENERATING = False
         send_three_dots()
@@ -1669,6 +1681,7 @@ def on_chat_message(data):
     global MESSAGES
     global PREFIX
     global TKNS
+    global TKNS_BCKP
     global DIRECT_INJECTIONS
 
     char = data["character"]
@@ -1680,15 +1693,26 @@ def on_chat_message(data):
         #print(f"char=/{char}/")
     if data["message"]:
         pprint(f"{msg}", sp_aft=True)
-        #print(f"msg=/{msg}/")
+
         # !!! DETECT DIRECT INJECTION !!!
         if msg.endswith("/"):
             DIRECT_INJECTIONS = True
             msg = msg[:-1]
             args.first_words = msg
             args.character = char
-            pprint(f"(direct injection from user with args.char={args.character} args.first_words=/{args.first_words}/, consider this is empty message and continue)")
+            pprint(f"(direct injection from user: args.char={args.character} args.first_words=/{args.first_words}/, consider this is empty message and continue)")
+        if msg.endswith("/skip"):
+            DIRECT_INJECTIONS = True
+            TKNS = TKNS_BCKP
+            TKNS = np.concatenate((TKNS, SEP_TKNS))
+            pprint(f"(direct injection from user: skip last generation, consider this is empty message and continue: generate again)")
+            #print(f"--- TKNS = /{llm.decode(TKNS)}/")
+            #print(f"--- TKNS_BCKP = /{llm.decode(TKNS_BCKP)}/")
+            with LeLocle:
+                IS_GENERATING = False
+            send_three_dots()
         # !!! END !!
+
     if not DIRECT_INJECTIONS:
         MESSAGES.append(data)
         character = data["character"]
