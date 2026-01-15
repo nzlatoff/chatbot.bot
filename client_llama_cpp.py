@@ -287,6 +287,8 @@ class SlidingWindowLLM:
         # vérifie le vocab
         #print("**** <|s|> token ID:", self.model.tokenizer.get_vocab().get("<|s|>"))
         #print("**** <|e|> token ID:", self.model.tokenizer.get_vocab().get("<|e|>"))
+        print("**** <|s|> tokenized:", self.model.tokenize(b"<|s|>", add_bos=False))
+        print("**** <|e|> tokenized:", self.model.tokenize(b"<|e|>", add_bos=False))
 
     def generate(self, prompt_tokens, batch_size, max_tokens=170):
         """
@@ -310,7 +312,7 @@ class SlidingWindowLLM:
             context_text,
             #seed = -1,
             max_tokens=max_tokens,
-            stop=["<|e|>"],
+            stop=["<|e|>","|e|>", "e|>"],
             repeat_penalty = 1.2,
             temperature=self.temperature,
             top_p=self.top_p,
@@ -1483,6 +1485,7 @@ def generate_new():
 
     send_ind()
 
+    # trigger tts on server side
     send_direct_message(
         {"character": char, "message": message, "user": args.server_name, "id": BOT_ID}
     )
