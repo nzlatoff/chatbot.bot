@@ -287,8 +287,8 @@ class SlidingWindowLLM:
         # vérifie le vocab
         #print("**** <|s|> token ID:", self.model.tokenizer.get_vocab().get("<|s|>"))
         #print("**** <|e|> token ID:", self.model.tokenizer.get_vocab().get("<|e|>"))
-        print("**** <|s|> tokenized:", self.model.tokenize(b"<|s|>", add_bos=False))
-        print("**** <|e|> tokenized:", self.model.tokenize(b"<|e|>", add_bos=False))
+        print("**** <|s|> tokenized:", self.model.tokenize("<|s|>".encode("utf-8"), add_bos=False))
+        print("**** <|e|> tokenized:", self.model.tokenize("<|e|>".encode("utf-8"), add_bos=False))
 
     def generate(self, prompt_tokens, batch_size, max_tokens=170):
         """
@@ -305,14 +305,15 @@ class SlidingWindowLLM:
         self.context_tokens = prompt_tokens.tolist()
 
         # Décode le contexte en texte pour l'envoyer au modèle
-        context_text = self.model.detokenize(self.context_tokens).decode("utf-8", errors="ignore")
+        context_text = self.model.detokenize(self.context_tokens).decode("utf-8", errors="replace")
 
         # Génération avec du texte brut
         outputs = [self.model.create_completion(
             context_text,
             #seed = -1,
             max_tokens=max_tokens,
-            stop=["<|e|>","|e|>", "e|>"],
+            #stop=["<|e|>","|e|>", "e|>", ">"],
+            stop=["<|e|>"],
             repeat_penalty = 1.2,
             temperature=self.temperature,
             top_p=self.top_p,
@@ -367,7 +368,7 @@ class SlidingWindowLLM:
                     pprint(f"(generate - batch {i} - step: REACHED THRESHOLD LENGTH, TRIMMING CONTEXT LOCALLY (TKNS are unchanged) context_tokens is currently /{self.decode(self.context_tokens).strip()}/ (size: {len(self.context_tokens)}))", sep="-", sp_bf=True, sep_aft="-", sp_aft=True)
 
                 # transforme le contexte en texte
-                context_text = self.model.detokenize(self.context_tokens).decode("utf_8", errors="ignore")
+                context_text = self.model.detokenize(self.context_tokens).decode("utf-8", errors="replace")
                 print(f"**GENERATE** context=/{context_text}/")
 
                 # génère une suite
