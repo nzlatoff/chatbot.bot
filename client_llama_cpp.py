@@ -316,7 +316,7 @@ class SlidingWindowLLM:
         print("**** <|s|> tokenized:", self.model.tokenize("<|s|>".encode("utf-8"), add_bos=False))
         print("**** <|e|> tokenized:", self.model.tokenize("<|e|>".encode("utf-8"), add_bos=False))
 
-    def generate(self, prompt_tokens, batch_size, max_tokens=170):
+    def generate(self, prompt_tokens, batch_size, max_tokens=170): #170):
         """
         Génère du texte en conservant un contexte glissant.
 
@@ -363,15 +363,23 @@ class SlidingWindowLLM:
                 #print(f"*** DEBUG *** GENERATE (direct injection) DIRECT_INJECTIONS_FIRST_WORDS_BCKP = /{DIRECT_INJECTIONS_FIRST_WORDS_BCKP}/")
                 if not args.base:
                     # cas du modele utilisé en mode dialogue
-                    char = args.character + "\n" + DIRECT_INJECTIONS_FIRST_WORDS_BCKP
+                    # char = args.character + "\n" + DIRECT_INJECTIONS_FIRST_WORDS_BCKP
+                    text_to_stream = args.character + "\n" + DIRECT_INJECTIONS_FIRST_WORDS_BCKP
                 else:
                     # cas du modele utilisé en mode full completion
-                    char = DIRECT_INJECTIONS_FIRST_WORDS_BCKP
-                waiting_for_char = False
+                    #char = DIRECT_INJECTIONS_FIRST_WORDS_BCKP
+                    text_to_stream = DIRECT_INJECTIONS_FIRST_WORDS_BCKP
             else:
-                char = ""
-                waiting_for_char = True
+                text_to_stream = ""
+            
+            if not args.base:
+                waiting_for_char = False    # !!! testing
+            else:
+                waiting_for_char = False
 
+            print(f"*** DEBUG *** text_to_stream=/{text_to_stream}/ waiting_for_char=/{waiting_for_char}/")
+            print(f"*** DEBUG *** context_text=/{context_text}/")
+            char = ""
             last_sent_idx = 0
             delimiters = ("...", "..", ":", ".", "…", ";", "!", "?", ")") # for splitting inside the tts
             charsPerSecond = 15 #
@@ -397,14 +405,15 @@ class SlidingWindowLLM:
                 stream=True
                 ):
                     chunk = output["choices"][0]["text"]
-                    generated_text += chunk
+                    generated_text += chunk     # contains only what has been generated (without injections)
+                    text_to_stream += chunk     # contains all the text to be streamed both on display and tts (with injection)
 
-                    """if waiting_for_char:
+                    if waiting_for_char:
                         # Normalisation (important)
-                        normalized_generated_text = generated_text.replace("\r\n", "\n")
+                        #normalized_generated_text = generated_text.replace("\r\n", "\n")
 
                         # On cherche : \n  texte  \n
-                        parts = normalized_generated_text.split("\n")
+                        parts = text_to_stream.split("\n")
 
                         if len(parts) >= 3:
                             candidate = parts[1].strip()
@@ -415,43 +424,46 @@ class SlidingWindowLLM:
                                 waiting_for_char = False
 
                                 # DEBUG
-                                print(f"[CHAR DETECTED] => '{char}'")"""
+                                print(f"[CHAR DETECTED] => '{char}'")
                     
-                    chunk_queue.put({"chunk": chunk,"generated_text": generated_text})
+                    #chunk_queue.put({"chunk": chunk,"generated_text": generated_text})
+                    #print(f"*** DEBUG *** char=/{char}/ text_to_stream=/{text_to_stream}/")
+                    chunk_queue.put({"chunk": chunk,"generated_text": text_to_stream})
                     #chunk_tokens = self.model.tokenize(chunk.encode("utf-8"), add_bos=False)
                     #[send_entrails(f"{token} ", no_cr=True) for token in chunk_tokens]
                     #send_typing({"character": char, "message": generated_text,})
 
                     # send tts
                     # current_segment = generated_text[last_sent_idx:]
-                    if generated_text.endswith(delimiters):
-                        new_message = generated_text[last_sent_idx:]
+                    if text_to_stream.endswith(delimiters):
+                        new_message = text_to_stream[last_sent_idx:]
                         #print(f"*** DEBUG *** new_message=/{new_message}/")
                         
                         if new_message.strip():  # avoid sending empty/whitespace
-                            #print(f"*** DEBUG *** new_message (send)=/{new_message}/")
+                            print(f"*** DEBUG *** new_message (send)=/{new_message}/")
                             send_direct_message({
                                 "character": char,
                                 "message": new_message,
                                 "user": args.server_name,
                                 "id": BOT_ID
                             })
-                            last_sent_idx = len(generated_text)
+                            last_sent_idx = len(text_to_stream)
                             time.sleep((len(new_message) / charsPerSecond) / playbackRate)
                     
                     #time.sleep(args.tempo) 
                     
             send_entrails(f" ]", no_cr=True)
             # send the remaining generated_text to tts
-            remaining = generated_text[last_sent_idx:]
+            remaining = text_to_stream[last_sent_idx:]
             if remaining.strip():
-                #print(f"*** DEBUG *** remaining_message (send)=/{remaining}/")
+                print(f"*** DEBUG *** remaining_message (send)=/{remaining}/")
                 send_direct_message({
                     "character": char,
                     "message": remaining,
                     "user": args.server_name,
                     "id": BOT_ID
                 })
+                last_sent_idx = len(text_to_stream) # ????
                 time.sleep((len(remaining) / charsPerSecond) / playbackRate)
 
             """ output is a dict, containing:
@@ -512,7 +524,7 @@ class SlidingWindowLLM:
                     top_k = self.top_k)"""
 
                 more_generated_text = ""
-                last_sent_idx = 0
+                #last_sent_idx = 0
                 pprint(f"(generated - batch {i+1} - step: generated_tokens = [ ")
                 for more_output in self.model.create_completion(
                     context_text,
@@ -528,32 +540,34 @@ class SlidingWindowLLM:
 
                     more_chunk = more_output["choices"][0]["text"]
                     more_generated_text += more_chunk
+                    text_to_stream += more_chunk
                     
-                    chunk_queue.put({"chunk": more_chunk,"generated_text": generated_text+more_generated_text})
+                    #chunk_queue.put({"chunk": more_chunk,"generated_text": generated_text+more_generated_text})
+                    chunk_queue.put({"chunk": more_chunk,"generated_text": text_to_stream})
                     #more_chunk_tokens = self.model.tokenize(more_chunk.encode("utf-8"), add_bos=False)
                     #[send_entrails(f"{token} ", no_cr=True) for token in more_chunk_tokens]
                     #send_typing({"character": char, "message": generated_text+more_generated_text})
 
                     # send tts
-                    if more_generated_text.endswith(delimiters):
-                        new_message = more_generated_text[last_sent_idx:]
+                    if text_to_stream.endswith(delimiters):
+                        new_message = text_to_stream[last_sent_idx:]
                         #print(f"*** DEBUG *** new_message=/{new_message}/")
                         
                         if new_message.strip():  # avoid sending empty/whitespace
-                            #print(f"*** DEBUG *** new_message (sent) =/{new_message}/")
+                            print(f"*** DEBUG *** new_message (sent) =/{new_message}/")
                             send_direct_message({
                                 "character": char,
                                 "message": new_message,
                                 "user": args.server_name,
                                 "id": BOT_ID
                             })
-                            last_sent_idx = len(more_generated_text)
+                            last_sent_idx = len(text_to_stream)
                             time.sleep((len(new_message) / charsPerSecond) / playbackRate)
 
                     #time.sleep(args.tempo)
                 send_entrails(f" ]", no_cr=True)
                 # send the remaining generated_text to tts
-                remaining = more_generated_text[last_sent_idx:]
+                remaining = text_to_stream[last_sent_idx:]
                 if remaining.strip():
                     #print(f"*** DEBUG *** remaining_message (send)=/{remaining}/")
                     send_direct_message({
