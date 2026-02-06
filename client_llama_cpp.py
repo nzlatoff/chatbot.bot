@@ -262,7 +262,7 @@ LeLocle = Lock()
 #    else ["<|s|>", "<|e|>", "<|endoftext|>"],
 #)
 
-def typing_worker(chunk_queue, model, char):
+def typing_worker(chunk_queue, model):
     # for gradual typing (text + token) during generation
     while True:
         item = chunk_queue.get()
@@ -271,6 +271,7 @@ def typing_worker(chunk_queue, model, char):
 
         chunk = item["chunk"]
         generated_text = item["generated_text"]
+        char = item["character"]
 
         chunk_tokens = model.tokenize(
             chunk.encode("utf-8"),
@@ -280,6 +281,7 @@ def typing_worker(chunk_queue, model, char):
         for token in chunk_tokens:
             send_entrails(f"{token} ", no_cr=True)
 
+        #print(f"*** DEBUG *** [TYPING WORKER] => '{char}'")
         send_typing({
             "character": char,
             "message": generated_text,
@@ -364,7 +366,7 @@ class SlidingWindowLLM:
                 if not args.base:
                     # cas du modele utilisé en mode dialogue
                     # char = args.character + "\n" + DIRECT_INJECTIONS_FIRST_WORDS_BCKP
-                    text_to_stream = args.character + "\n" + DIRECT_INJECTIONS_FIRST_WORDS_BCKP
+                    text_to_stream = "\n" + args.character + "\n" + DIRECT_INJECTIONS_FIRST_WORDS_BCKP
                 else:
                     # cas du modele utilisé en mode full completion
                     #char = DIRECT_INJECTIONS_FIRST_WORDS_BCKP
@@ -373,7 +375,7 @@ class SlidingWindowLLM:
                 text_to_stream = ""
             
             if not args.base:
-                waiting_for_char = False    # !!! testing
+                waiting_for_char = True
             else:
                 waiting_for_char = False
 
@@ -388,7 +390,7 @@ class SlidingWindowLLM:
             #print(f"*** DEBUG *** args.first_words=/{args.first_words}/")
 
             chunk_queue = queue.Queue() # for gradual display
-            typing_thread = threading.Thread(target=typing_worker, args=(chunk_queue, self.model, char), daemon=True)
+            typing_thread = threading.Thread(target=typing_worker, args=(chunk_queue, self.model), daemon=True)
             typing_thread.start() # démarre la thread
             
             pprint(f"(generated - batch {i+1} - step: generated_tokens = [ ")
@@ -410,7 +412,7 @@ class SlidingWindowLLM:
 
                     if waiting_for_char:
                         # Normalisation (important)
-                        #normalized_generated_text = generated_text.replace("\r\n", "\n")
+                        normalized_generated_text = generated_text.replace("\r\n", "\n")
 
                         # On cherche : \n  texte  \n
                         parts = text_to_stream.split("\n")
@@ -424,11 +426,15 @@ class SlidingWindowLLM:
                                 waiting_for_char = False
 
                                 # DEBUG
-                                print(f"[CHAR DETECTED] => '{char}'")
+                                print(f"*** DEBUG *** [CHAR DETECTED] => '{char}'")
+
+                                # suppression de la ligne contenant le char
+                                text_to_stream = "\n".join([parts[0]] + parts[2:])
                     
                     #chunk_queue.put({"chunk": chunk,"generated_text": generated_text})
                     #print(f"*** DEBUG *** char=/{char}/ text_to_stream=/{text_to_stream}/")
-                    chunk_queue.put({"chunk": chunk,"generated_text": text_to_stream})
+                    if not waiting_for_char or args.base:
+                        chunk_queue.put({"chunk": chunk, "generated_text": text_to_stream, "character": char})
                     #chunk_tokens = self.model.tokenize(chunk.encode("utf-8"), add_bos=False)
                     #[send_entrails(f"{token} ", no_cr=True) for token in chunk_tokens]
                     #send_typing({"character": char, "message": generated_text,})
@@ -440,7 +446,7 @@ class SlidingWindowLLM:
                         #print(f"*** DEBUG *** new_message=/{new_message}/")
                         
                         if new_message.strip():  # avoid sending empty/whitespace
-                            print(f"*** DEBUG *** new_message (send)=/{new_message}/")
+                            print(f"*** DEBUG *** char, new_message (send to tts) = /{char}/ /{new_message}/")
                             send_direct_message({
                                 "character": char,
                                 "message": new_message,
@@ -543,7 +549,7 @@ class SlidingWindowLLM:
                     text_to_stream += more_chunk
                     
                     #chunk_queue.put({"chunk": more_chunk,"generated_text": generated_text+more_generated_text})
-                    chunk_queue.put({"chunk": more_chunk,"generated_text": text_to_stream})
+                    chunk_queue.put({"chunk": chunk, "generated_text": text_to_stream, "character": char})
                     #more_chunk_tokens = self.model.tokenize(more_chunk.encode("utf-8"), add_bos=False)
                     #[send_entrails(f"{token} ", no_cr=True) for token in more_chunk_tokens]
                     #send_typing({"character": char, "message": generated_text+more_generated_text})
