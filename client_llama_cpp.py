@@ -99,6 +99,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--n_gpu_layers",
+    type=int,
+    default=-1,
+    help="""Number of GPU layers used when loading model""",
+)
+
+parser.add_argument(
     "--temperature", type=float, default=0.75, help="Temperature when sampling.",
 )
 
@@ -281,7 +288,7 @@ def typing_worker(chunk_queue, model):
         for token in chunk_tokens:
             send_entrails(f"{token} ", no_cr=True)
 
-        #print(f"*** DEBUG *** [TYPING WORKER] => '{char}'")
+        #print(f"*** DEBUG *** [TYPING WORKER] char, message => /{char}/ /{generated_text}/")
         send_typing({
             "character": char,
             "message": generated_text,
@@ -300,11 +307,13 @@ class SlidingWindowLLM:
         :param temperature: Température pour la génération
         :param top_p: Paramètre nucleus sampling
         """
+
         self.model = Llama(model_path = model_path,
                 n_ctx = max_context_size,
                 #seed = -1,
                 #n_gpu_layers = 33
-                n_gpu_layers = -1)
+                #n_gpu_layers = 20)
+                n_gpu_layers = args.n_gpu_layers)
         #self.max_context_size = max_context_size
         self.max_context_size = args.limit_prefix
         self.temperature = temperature
@@ -374,6 +383,7 @@ class SlidingWindowLLM:
             else:
                 text_to_stream = ""
             
+            text_to_stream_bckp = text_to_stream    # backup (for text writing)
             if not args.base:
                 waiting_for_char = True
             else:
@@ -409,6 +419,7 @@ class SlidingWindowLLM:
                     chunk = output["choices"][0]["text"]
                     generated_text += chunk     # contains only what has been generated (without injections)
                     text_to_stream += chunk     # contains all the text to be streamed both on display and tts (with injection)
+                    text_to_stream_bckp += chunk
 
                     if waiting_for_char:
                         # Normalisation (important)
@@ -427,14 +438,16 @@ class SlidingWindowLLM:
 
                                 # DEBUG
                                 print(f"*** DEBUG *** [CHAR DETECTED] => '{char}'")
-
+                                
                                 # suppression de la ligne contenant le char
                                 text_to_stream = "\n".join([parts[0]] + parts[2:])
                     
                     #chunk_queue.put({"chunk": chunk,"generated_text": generated_text})
                     #print(f"*** DEBUG *** char=/{char}/ text_to_stream=/{text_to_stream}/")
-                    if not waiting_for_char or args.base:
-                        chunk_queue.put({"chunk": chunk, "generated_text": text_to_stream, "character": char})
+
+                    #if not waiting_for_char or args.base:  # test: never send char for text writing
+                    chunk_queue.put({"chunk": chunk, "generated_text": text_to_stream_bckp, "character": ""})
+                    
                     #chunk_tokens = self.model.tokenize(chunk.encode("utf-8"), add_bos=False)
                     #[send_entrails(f"{token} ", no_cr=True) for token in chunk_tokens]
                     #send_typing({"character": char, "message": generated_text,})
@@ -547,9 +560,13 @@ class SlidingWindowLLM:
                     more_chunk = more_output["choices"][0]["text"]
                     more_generated_text += more_chunk
                     text_to_stream += more_chunk
+                    text_to_stream_bckp += more_chunk
                     
                     #chunk_queue.put({"chunk": more_chunk,"generated_text": generated_text+more_generated_text})
-                    chunk_queue.put({"chunk": chunk, "generated_text": text_to_stream, "character": char})
+
+                    # test: never send char for text writing
+                    chunk_queue.put({"chunk": chunk, "generated_text": text_to_stream_bckp, "character": ""})
+
                     #more_chunk_tokens = self.model.tokenize(more_chunk.encode("utf-8"), add_bos=False)
                     #[send_entrails(f"{token} ", no_cr=True) for token in more_chunk_tokens]
                     #send_typing({"character": char, "message": generated_text+more_generated_text})
@@ -582,6 +599,8 @@ class SlidingWindowLLM:
                         "user": args.server_name,
                         "id": BOT_ID
                     })
+                    last_sent_idx = len(text_to_stream) # ????
+                    time.sleep((len(remaining) / charsPerSecond) / playbackRate)
                 
                 #more_generated_text = more_outputs["choices"][0]["text"]
                 # Tokeniser la réponse générée
@@ -654,6 +673,7 @@ if args.base:
     END = ""
     START = ""
     STOP_SEQUENCE=["\n"]
+    #args.temperature = 0.5
 else:
     # !!!! DANGER !!! CHANGE SEPARATORS AVOIDING LAST \n
     #SEPARATORS = "\n<|e|>\n<|s|>\n"
