@@ -310,6 +310,7 @@ class SlidingWindowLLM:
 
         self.model = Llama(model_path = model_path,
                 n_ctx = max_context_size,
+                n_batch = 128,  # nombre de tokens traités en une seule passe lors de l'ingestion d'un prompt pour construction du KV cache - default: 512
                 #seed = -1,
                 #n_gpu_layers = 33
                 #n_gpu_layers = 20)
