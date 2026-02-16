@@ -92,6 +92,10 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--tts", action="store_true", help="send text to tts if specified",
+)
+
+parser.add_argument(
     "--batch_size",
     type=int,
     default=1,
@@ -394,7 +398,7 @@ class SlidingWindowLLM:
             print(f"*** DEBUG *** context_text=/{context_text}/")
             char = ""
             last_sent_idx = 0
-            delimiters = ("...", "..", ":", ".", "…", ";", "!", "?", ")") # for splitting inside the tts
+            delimiters = ("...", "..", ":", ".", "…", ";", "!", "?", "," ")") # for splitting inside the tts
             charsPerSecond = 15 #
             playbackRate = 0.9
             #print(f"*** DEBUG *** args.character=/{args.character}/")
@@ -459,7 +463,7 @@ class SlidingWindowLLM:
                         new_message = text_to_stream[last_sent_idx:]
                         #print(f"*** DEBUG *** new_message=/{new_message}/")
                         
-                        if new_message.strip():  # avoid sending empty/whitespace
+                        if new_message.strip() and args.tts:  # avoid sending empty/whitespace
                             print(f"*** DEBUG *** char, new_message (send to tts) = /{char}/ /{new_message}/")
                             send_direct_message({
                                 "character": char,
@@ -475,7 +479,7 @@ class SlidingWindowLLM:
             send_entrails(f" ]", no_cr=True)
             # send the remaining generated_text to tts
             remaining = text_to_stream[last_sent_idx:]
-            if remaining.strip():
+            if remaining.strip() and args.tts:
                 print(f"*** DEBUG *** remaining_message (send)=/{remaining}/")
                 send_direct_message({
                     "character": char,
@@ -577,7 +581,7 @@ class SlidingWindowLLM:
                         new_message = text_to_stream[last_sent_idx:]
                         #print(f"*** DEBUG *** new_message=/{new_message}/")
                         
-                        if new_message.strip():  # avoid sending empty/whitespace
+                        if new_message.strip() and args.tts:  # avoid sending empty/whitespace
                             print(f"*** DEBUG *** new_message (sent) =/{new_message}/")
                             send_direct_message({
                                 "character": char,
@@ -592,7 +596,7 @@ class SlidingWindowLLM:
                 send_entrails(f" ]", no_cr=True)
                 # send the remaining generated_text to tts
                 remaining = text_to_stream[last_sent_idx:]
-                if remaining.strip():
+                if remaining.strip() and args.tts:
                     #print(f"*** DEBUG *** remaining_message (send)=/{remaining}/")
                     send_direct_message({
                         "character": char,
@@ -1736,6 +1740,7 @@ def generate_new():
         return reset_gen()
 
     char, message = select_in_batch(data, chars, messages)
+    print(f"*** DEBUG *** [GENERATE NEW] char = /{char}/ message = /{message}/")
 
     if RESETTING:
         return reset_gen()
@@ -1743,11 +1748,12 @@ def generate_new():
     send_ind()
 
     if args.batch_size > 1:
-        # trigger tts on server side : send message in direct mode (eg in /bots, mode `direct`) that is without gradual display
-        # no need for one single batch: it has already been streamed
-        send_direct_message(
-            {"character": char, "message": message, "user": args.server_name, "id": BOT_ID}
-        )
+        if args.tts:
+            # trigger tts on server side : send message in direct mode (eg in /bots, mode `direct`) that is without gradual display
+            # no need for one single batch: it has already been streamed
+            send_direct_message(
+                {"character": char, "message": message, "user": args.server_name, "id": BOT_ID}
+            )
         #print(f"SEND_DIRECT_MESSAGE CHARACTER=/{char}/\nSEND_DIRECT_MESSAGE MESSAGE=/{message}/")
 
         # send writing with variable speed (skip for gradual display: !! need to check the case fancy_tok_typing return false !!)
