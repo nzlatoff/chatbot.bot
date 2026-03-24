@@ -27,6 +27,7 @@ load_dotenv()
 
 BOT_TOKEN=os.getenv("BOT_TOKEN")
 CHATBOT_INTERFACE_HOST=os.getenv("CHATBOT_HOST")
+#print(f"*** DEBUG *** [ENV] BOT_TOKEN, CHATBOT_HOST => /{BOT_TOKEN}/ /{CHATBOT_INTERFACE_HOST}/")
 # numpy cosmetics
 np.set_printoptions(formatter={"all": lambda x: f"{str(x):>{5}}"})
 
@@ -678,6 +679,7 @@ if args.base:
     END = ""
     START = ""
     STOP_SEQUENCE=["\n"]
+    #STOP_SEQUENCE=[" "]
     #args.temperature = 0.5
 else:
     # !!!! DANGER !!! CHANGE SEPARATORS AVOIDING LAST \n
@@ -921,6 +923,7 @@ def preprocess_prefix():
 
     # pprint("(tkns)", sep="-", sp_bf=True)
     # pprint(str(TKNS), sp_aft=True)
+    #print(f"*** DEBUG *** TKNS decoded in preprocess_prefix => /{llm.decode(TKNS)}/")
 
     pprint("(pre-process prefix)")
     if not args.character:
@@ -1296,7 +1299,9 @@ def auto_loop(fn):
     global SEP_TKNS
     global TKNS
     with LeLocle:
-        TKNS = SEP_TKNS
+        if TKNS.size == 0:
+            # do not reset TKNS if something has already begun
+            TKNS = SEP_TKNS
     has_warned = False
     while True:
         if not IS_GENERATING:
@@ -2053,6 +2058,11 @@ def on_chat_message(data):
                     return
                 sleepy_times()
             if args.mode == "reactive":
+                # 1. le_random_wall
+                # 2. try_catch_wrapper(generate_new) -> generate_new
+                # 3.    process_received_messages()
+                # 4.    preprocess_prefix()
+                # 5.    llm.generate
                 if not le_random_wall(generate_new):
                     return
                 sleepy_times()
@@ -2165,6 +2175,8 @@ def set_config(data):
                 sp_aft=True,
                 sep_aft="=",
             )
+        #print(f"*** DEBUG *** TKNS decoded after set_config => /{llm.decode(TKNS)}/")
+        #pprint(le_model.decode(TKNS).strip(), sp_aft=True)
 
 
 @sio.on("server sends choice")
