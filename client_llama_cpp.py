@@ -520,6 +520,15 @@ class SlidingWindowLLM:
             #pprint(f"(generated - batch {i+1} - step: generated_tokens = {generated_tokens})")
             pprint(f"(generated - batch {i+1} - step: ... in other words, generated_text=/{generated_text.strip()} (finish reason:{finish_reasons[-1]})/)")
 
+            # Test: for using case not in base model (full completion): if the model generates only STOP_SEQUENCE ie generated_text contains only spaces or \n
+            if not generated_text.strip() and not args.base and not DIRECT_INJECTIONS:
+                generated_text = random.choice(["\nL'AUTEUR\n", "\nL'AUTRICE\n"])
+                message_empty = random.choice(["silence\n", "un silence\n", "pause\n", "une pause\n", "temps\n", "un temps\n"])
+                generated_text += message_empty
+                #send_typing({"character": char, "message": message_empty,})
+                chunk_queue.put({"chunk": message_empty, "generated_text": message_empty, "character": char})
+                pprint(f"(generated - batch {i+1} - step: model has generated nothing - interpreting this as a silence)")
+            
             # Test: being sure that <|e|> is generated
             more_generated_text_previous_step = ""
             while finish_reasons[-1] == "length":
